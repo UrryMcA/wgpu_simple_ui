@@ -1,0 +1,17 @@
+use super::types::{Size, EdgeInsets};
+use super::render_box::RenderBox;
+
+pub trait Widget {
+    fn min_size(&self) -> Size;
+    fn margin(&self) -> EdgeInsets { EdgeInsets::default() }
+    fn padding(&self) -> EdgeInsets { EdgeInsets::default() }
+    fn create_render_object(&self) -> Box<dyn RenderBox>;
+}
+
+pub trait LeafRenderObjectWidget: Widget {}
+pub trait SingleChildRenderObjectWidget: Widget {
+    fn child(&self) -> Option<&dyn Widget>;
+}
+pub trait MultiChildRenderObjectWidget: Widget {
+    fn children(&self) -> &[Box<dyn Widget>];
+}
