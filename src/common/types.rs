@@ -6,6 +6,9 @@ pub struct Rect {
 }
 impl Rect {
     pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self { Self { x, y, w, h } }
+    pub fn contains(&self, px: f32, py: f32) -> bool {
+        px >= self.x && px <= self.x + self.w && py >= self.y && py <= self.y + self.h
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

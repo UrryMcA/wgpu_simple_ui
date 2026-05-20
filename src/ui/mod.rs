@@ -9,6 +9,7 @@ pub mod column;
 pub mod stack;
 pub mod positioned;
 pub mod bitmap_font;
+pub mod hit_tester;
 
 pub use widget::{Widget, SingleChildRenderObjectWidget, MultiChildRenderObjectWidget, LeafRenderObjectWidget};
 pub use ui_manager::UiManager;
