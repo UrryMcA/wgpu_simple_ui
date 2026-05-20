@@ -5,6 +5,12 @@ pub struct Size {
 }
 impl Size {
     pub fn new(w: f32, h: f32) -> Self { Self { width: w, height: h } }
+    pub fn inflate(&self, margin: EdgeInsets) -> Self {
+        Size {
+            width: self.width + margin.left + margin.right,
+            height: self.height + margin.top + margin.bottom,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]

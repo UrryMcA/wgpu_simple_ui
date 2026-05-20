@@ -84,7 +84,7 @@ impl UiRenderer {
         // Pipeline layout
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("ui_pipeline_layout"),
-            bind_group_layouts: &[&uniform_layout, &texture_bind_group_layout],
+            bind_group_layouts: &[Some(&uniform_layout), Some(&texture_bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -192,6 +192,13 @@ impl UiRenderer {
             &self.device, &self.queue, &rgba, atlas_w, atlas_h,
             &format!("font_{}", name)
         );
+
+        let line_height = raw_glyphs.iter()
+            .map(|g| g.height as f32)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0);
+
+
         let mut chars = std::collections::HashMap::new();
         for raw in raw_glyphs {
             let info = crate::common::GlyphInfo {
@@ -207,7 +214,7 @@ impl UiRenderer {
             };
             chars.insert(raw.id, info);
         }
-        let line_height = raw_glyphs.iter().map(|g| g.height as f32).max().unwrap_or(0.0);
+
         let gpu_font = GpuBitmapFont::new(texture_id, line_height, chars);
         self.ui_manager.add_font(name.to_string(), Box::new(gpu_font));
         true
@@ -252,7 +259,7 @@ impl UiRenderer {
         for cmd in self.commands.drain(..) {
             groups.entry(cmd.texture_id).or_default().push(cmd.vertices);
         }
-        let mut all_vertices = Vec::new();
+        let mut all_vertices: Vec<Vertex> = Vec::new();
         let mut draw_calls = Vec::new();
         for (tid, verts_list) in groups.iter() {
             let start = all_vertices.len() as u32;

@@ -19,7 +19,7 @@ impl Row {
 impl Widget for Row {
     fn min_size(&self) -> Size {
         let mut total_width = 0.0;
-        let mut max_height = 0.0;
+        let mut max_height: f32 = 0.0;
         for child in &self.children {
             let s = child.min_size();
             total_width += s.width;
@@ -58,11 +58,12 @@ impl RenderBox for RowRenderObject {
     fn layout(&mut self, constraints: Constraints) -> Size {
         let mut child_sizes = Vec::new();
         let mut total_width = 0.0;
-        let mut max_height = 0.0;
+        let mut max_height: f32 = 0.0;
+        let children_len = self.children.len();
         for child in &mut self.children {
             let child_constraints = Constraints {
                 min_width: 0.0,
-                max_width: constraints.max_width - total_width - self.spacing * (self.children.len() - 1) as f32,
+                max_width: constraints.max_width - total_width - self.spacing * (children_len - 1) as f32,
                 min_height: constraints.min_height,
                 max_height: constraints.max_height,
             };

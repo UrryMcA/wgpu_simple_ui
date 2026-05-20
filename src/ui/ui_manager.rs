@@ -32,7 +32,7 @@ impl UiManager {
         self.fonts.insert(name, font);
     }
 
-    pub fn get_font(&self, name: &str) -> Option<&dyn BitmapFont> {
+    pub fn get_font(&self, name: &str) -> Option<&(dyn BitmapFont + Send + Sync)> {
         self.fonts.get(name).map(|f| f.as_ref())
     }
 

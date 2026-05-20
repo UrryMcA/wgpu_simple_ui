@@ -17,8 +17,8 @@ impl Stack {
 
 impl Widget for Stack {
     fn min_size(&self) -> Size {
-        let mut max_w = 0.0;
-        let mut max_h = 0.0;
+        let mut max_w: f32 = 0.0;
+        let mut max_h: f32 = 0.0;
         for child in &self.children {
             let s = child.min_size();
             max_w = max_w.max(s.width);
@@ -51,8 +51,8 @@ struct StackRenderObject {
 
 impl RenderBox for StackRenderObject {
     fn layout(&mut self, constraints: Constraints) -> Size {
-        let mut max_w = 0.0;
-        let mut max_h = 0.0;
+        let mut max_w: f32 = 0.0;
+        let mut max_h: f32 = 0.0;
         for child in &mut self.children {
             let size = child.layout(constraints);
             max_w = max_w.max(size.width);

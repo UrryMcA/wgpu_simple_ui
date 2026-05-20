@@ -19,7 +19,7 @@ impl Column {
 impl Widget for Column {
     fn min_size(&self) -> Size {
         let mut total_height = 0.0;
-        let mut max_width = 0.0;
+        let mut max_width: f32 = 0.0;
         for child in &self.children {
             let s = child.min_size();
             total_height += s.height;
@@ -58,13 +58,14 @@ impl RenderBox for ColumnRenderObject {
     fn layout(&mut self, constraints: Constraints) -> Size {
         let mut child_sizes = Vec::new();
         let mut total_height = 0.0;
-        let mut max_width = 0.0;
+        let mut max_width: f32 = 0.0;
+        let children_len = self.children.len();
         for child in &mut self.children {
             let child_constraints = Constraints {
                 min_width: constraints.min_width,
                 max_width: constraints.max_width,
                 min_height: 0.0,
-                max_height: constraints.max_height - total_height - self.spacing * (self.children.len() - 1) as f32,
+                max_height: constraints.max_height - total_height - self.spacing * (children_len - 1) as f32,
             };
             let size = child.layout(child_constraints);
             child_sizes.push(size);
