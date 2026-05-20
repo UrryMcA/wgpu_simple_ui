@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use crate::common::{BitmapFont, GlyphInfo};
+
+use crate::common::bitmap_font::{BitmapFont, GlyphInfo};
 
 /// Сырой глиф (из .fnt файла). Не зависит от serde.
 #[derive(Debug, Clone)]

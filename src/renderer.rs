@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder, RenderPass, RenderPipeline, BindGroup, BindGroupLayout};
 use wgpu::util::DeviceExt;
 
-use crate::common::{Vertex, DrawCommand, Primitives};
+use crate::common::vertex::{Vertex, DrawCommand};
+use crate::common::primitives::{Primitives};
 use crate::texture_manager::TextureManager;
 use crate::loader::{TextureLoader, FontLoader};
 use crate::gpu_bitmap_font::{RawGlyph, GpuBitmapFont};

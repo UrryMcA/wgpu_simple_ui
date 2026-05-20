@@ -1,4 +1,5 @@
-use crate::common::{Primitives, Vertex};
+use crate::common::vertex::{Vertex};
+use crate::common::primitives::{Primitives};
 use std::f32::consts::PI;
 
 pub struct DefaultPrimitives;

@@ -1,7 +1,9 @@
 use super::widget::{Widget, LeafRenderObjectWidget};
 use super::render_box::RenderBox;
 use super::types::{Size, Point, Constraints, EdgeInsets, Rect};
-use crate::common::{DrawCommand, Primitives, generate_text_vertices};
+use crate::common::Primitives;
+use crate::common::bitmap_font::generate_text_vertices;
+use crate::common::vertex::{DrawCommand};
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
 

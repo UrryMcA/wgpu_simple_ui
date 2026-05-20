@@ -10,7 +10,6 @@ pub mod row;
 pub mod column;
 pub mod stack;
 pub mod positioned;
-pub mod test_panel;
 
 pub use types::{Size, Point, Constraints, EdgeInsets, Rect};
 pub use render_box::RenderBox;
@@ -24,4 +23,3 @@ pub use row::Row;
 pub use column::Column;
 pub use stack::Stack;
 pub use positioned::Positioned;
-pub use test_panel::create_test_panel;
