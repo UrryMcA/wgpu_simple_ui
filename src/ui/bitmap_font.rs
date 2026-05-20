@@ -1,22 +1,4 @@
-use super::vertex::Vertex;
-use super::primitives::Primitives;
-
-#[derive(Debug, Clone, Copy)]
-pub struct GlyphInfo {
-    pub width: f32,
-    pub height: f32,
-    pub u0: f32, pub v0: f32,
-    pub u1: f32, pub v1: f32,
-    pub xoffset: f32,
-    pub yoffset: f32,
-    pub xadvance: f32,
-}
-
-pub trait BitmapFont {
-    fn texture_id(&self) -> u64;
-    fn line_height(&self) -> f32;
-    fn get_glyph(&self, ch: char) -> Option<GlyphInfo>;
-}
+use crate::common::{Primitives, Vertex, types::{BitmapFont, Rect, TexCoords, UColor}};
 
 pub fn generate_text_vertices(
     font: &dyn BitmapFont,
@@ -32,6 +14,14 @@ pub fn generate_text_vertices(
         if let Some(g) = font.get_glyph(ch) {
             let w = g.width * scale;
             let h = g.height * scale;
+
+            let rect = Rect::new( 
+                pen_x + g.xoffset * scale,
+                 y + g.yoffset * scale, w, h);
+            let tex = TexCoords { u0:g.u0, v0:g.v0, u1:g.u1, v1:g.v1};
+            let col = UColor(color);
+            let verts = primitives.textured_rect_vertices(rect, tex, col);
+/*
             let verts = primitives.textured_rect_vertices(
                 pen_x + g.xoffset * scale,
                 y + g.yoffset * scale,
@@ -39,6 +29,7 @@ pub fn generate_text_vertices(
                 g.u0, g.v0, g.u1, g.v1,
                 color,
             );
+             */
             vertices.extend(verts);
             pen_x += g.xadvance * scale;
         }

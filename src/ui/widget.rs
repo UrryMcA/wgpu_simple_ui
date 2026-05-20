@@ -1,5 +1,5 @@
-use super::types::{Size, EdgeInsets};
-use super::render_box::RenderBox;
+use crate::common::{render_box::RenderBox, types::*};
+
 
 pub trait Widget {
     fn min_size(&self) -> Size;

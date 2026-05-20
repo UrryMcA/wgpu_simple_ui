@@ -1,6 +1,6 @@
 use super::widget::{Widget, LeafRenderObjectWidget};
-use super::render_box::RenderBox;
-use super::types::{Size, Point, Constraints, EdgeInsets, Rect};
+use crate::common::render_box::RenderBox;
+use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
@@ -52,12 +52,12 @@ impl RenderBox for ImageRenderObject {
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
     fn render(&self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, _textures: &TextureManager, _ui_manager: &UiManager) {
-        let verts = primitives.textured_rect_vertices(
-            self.position.x, self.position.y,
-            self.size.width, self.size.height,
-            0.0, 0.0, 1.0, 1.0,
-            [1.0,1.0,1.0,1.0],
-        );
+        let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
+        let tex_coords = TexCoords::new(0.0, 0.0, 1.0, 1.0);
+        let color = UColor::new(1.0, 1.0, 1.0, 1.0); // или UColor([1.0,1.0,1.0,1.0])
+
+        let verts = primitives.textured_rect_vertices(rect, tex_coords, color);
+
         commands.push(crate::common::DrawCommand { texture_id: self.texture_id, vertices: verts });
     }
 }

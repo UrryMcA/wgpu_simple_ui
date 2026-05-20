@@ -1,6 +1,6 @@
 use super::widget::{Widget, SingleChildRenderObjectWidget};
-use super::render_box::RenderBox;
-use super::types::{Size, Point, Constraints, EdgeInsets, Rect};
+use crate::common::render_box::RenderBox;
+use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
@@ -9,7 +9,7 @@ pub struct Container {
     child: Option<Box<dyn Widget>>,
     margin: EdgeInsets,
     padding: EdgeInsets,
-    color: Option<[f32;4]>,
+    color: Option<UColor>,
     corner_radius: f32,
 }
 
@@ -25,13 +25,13 @@ impl Container {
     }
     pub fn margin(mut self, m: EdgeInsets) -> Self { self.margin = m; self }
     pub fn padding(mut self, p: EdgeInsets) -> Self { self.padding = p; self }
-    pub fn color(mut self, c: [f32;4]) -> Self { self.color = Some(c); self }
+    pub fn color(mut self, c: UColor) -> Self { self.color = Some(c); self }
     pub fn corner_radius(mut self, r: f32) -> Self { self.corner_radius = r; self }
 }
 
 impl Widget for Container {
     fn min_size(&self) -> Size {
-        let child_min = self.child.as_ref().map(|c| c.min_size()).unwrap_or(Size::default());
+        let child_min = self.child.as_ref().map(|c| c.min_size()).unwrap_or_default();
         self.padding.inflate(child_min)
     }
     fn margin(&self) -> EdgeInsets { self.margin }
@@ -60,7 +60,7 @@ struct ContainerRenderObject {
     child_render: Option<Box<dyn RenderBox>>,
     margin: EdgeInsets,
     padding: EdgeInsets,
-    color: Option<[f32;4]>,
+    color: Option<UColor>,
     radius: f32,
     position: Point,
     size: Size,
@@ -105,7 +105,7 @@ impl RenderBox for ContainerRenderObject {
     fn render(&self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
         if let Some(color) = self.color {
             let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-            let bg = primitives.rounded_rect_vertices(rect.x, rect.y, rect.w, rect.h, self.radius, color);
+            let bg = primitives.rounded_rect_vertices(rect, self.radius, color);
             commands.push(crate::common::DrawCommand { texture_id: 0, vertices: bg });
         }
         if let Some(child) = &self.child_render {

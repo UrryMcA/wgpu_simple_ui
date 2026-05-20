@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder, RenderPass, RenderPipeline, BindGroup, BindGroupLayout};
+use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder, 
+    RenderPass, RenderPipeline, BindGroup};
 use wgpu::util::DeviceExt;
 
+use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader};
 use crate::common::vertex::{Vertex, DrawCommand};
 use crate::common::primitives::{Primitives};
 use crate::texture_manager::TextureManager;
-use crate::loader::{TextureLoader, FontLoader};
-use crate::gpu_bitmap_font::{RawGlyph, GpuBitmapFont};
 use crate::ui::UiManager;
 
 pub struct UiRenderer {
@@ -15,12 +15,12 @@ pub struct UiRenderer {
     pipeline: RenderPipeline,
     uniform_bind_group: BindGroup,
     uniform_buffer: wgpu::Buffer,
-    texture_bind_group_layout: BindGroupLayout,
+    //texture_bind_group_layout: BindGroupLayout,
     texture_manager: TextureManager,
     ui_manager: UiManager,
     commands: Vec<DrawCommand>,
     vertex_buffer: wgpu::Buffer,
-    vertex_buffer_capacity: usize,
+    //vertex_buffer_capacity: usize,
     surface_width: u32,
     surface_height: u32,
 }
@@ -139,12 +139,12 @@ impl UiRenderer {
             pipeline,
             uniform_bind_group,
             uniform_buffer,
-            texture_bind_group_layout,
+           // texture_bind_group_layout,
             texture_manager,
             ui_manager,
             commands: Vec::new(),
             vertex_buffer,
-            vertex_buffer_capacity: Self::MAX_VERTICES,
+            //vertex_buffer_capacity: Self::MAX_VERTICES,
             surface_width: width,
             surface_height: height,
         }
@@ -175,7 +175,7 @@ impl UiRenderer {
         self.surface_height = height;
         let proj = Self::ortho_projection(width as f32, height as f32);
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[Uniforms { proj }]));
-        self.ui_manager.layout(crate::ui::Size::new(width as f32, height as f32));
+        self.ui_manager.layout(Size::new(width as f32, height as f32));
     }
 
     pub fn load_texture(&mut self, name: &str, loader: &dyn TextureLoader) -> Option<u64> {
@@ -201,7 +201,7 @@ impl UiRenderer {
 
         let mut chars = std::collections::HashMap::new();
         for raw in raw_glyphs {
-            let info = crate::common::GlyphInfo {
+            let info = GlyphInfo {
                 width: raw.width as f32,
                 height: raw.height as f32,
                 u0: raw.x as f32 / atlas_w as f32,
@@ -226,7 +226,7 @@ impl UiRenderer {
 
     pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView) {
         // Layout UI
-        self.ui_manager.layout(crate::ui::Size::new(self.surface_width as f32, self.surface_height as f32));
+        self.ui_manager.layout(Size::new(self.surface_width as f32, self.surface_height as f32));
         // Сбор команд
         self.ui_manager.render(&mut self.commands, &self.texture_manager);
         // Рендер

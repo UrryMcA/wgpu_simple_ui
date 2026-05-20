@@ -1,4 +1,4 @@
-use super::types::{Constraints, Size, Point};
+use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;

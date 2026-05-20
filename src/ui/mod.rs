@@ -1,5 +1,3 @@
-pub mod types;
-pub mod render_box;
 pub mod widget;
 pub mod ui_manager;
 pub mod button;
@@ -10,9 +8,8 @@ pub mod row;
 pub mod column;
 pub mod stack;
 pub mod positioned;
+pub mod bitmap_font;
 
-pub use types::{Size, Point, Constraints, EdgeInsets, Rect};
-pub use render_box::RenderBox;
 pub use widget::{Widget, SingleChildRenderObjectWidget, MultiChildRenderObjectWidget, LeafRenderObjectWidget};
 pub use ui_manager::UiManager;
 pub use button::Button;
@@ -23,3 +20,4 @@ pub use row::Row;
 pub use column::Column;
 pub use stack::Stack;
 pub use positioned::Positioned;
+pub use bitmap_font::generate_text_vertices;

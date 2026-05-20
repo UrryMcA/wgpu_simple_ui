@@ -1,6 +1,6 @@
 use super::widget::{Widget, MultiChildRenderObjectWidget};
-use super::render_box::RenderBox;
-use super::types::{Size, Point, Constraints, EdgeInsets};
+use crate::common::render_box::RenderBox;
+use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;

@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use super::widget::Widget;
-use super::render_box::RenderBox;
-use super::types::{Size, Constraints, Point};
+use crate::common::render_box::RenderBox;
+use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
-use crate::common::BitmapFont;
 
 pub struct UiManager {
     root_widget: Option<Box<dyn Widget>>,
