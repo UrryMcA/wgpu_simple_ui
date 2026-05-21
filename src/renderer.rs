@@ -1,3 +1,4 @@
+// src/renderer.rs
 use std::collections::HashMap;
 use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder, 
     RenderPass, RenderPipeline, BindGroup};
@@ -5,7 +6,7 @@ use wgpu::util::DeviceExt;
 
 use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader};
 use crate::common::vertex::{Vertex, DrawCommand};
-use crate::common::primitives::{Primitives};
+use crate::common::primitives::Primitives;
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
 
@@ -15,12 +16,9 @@ pub struct UiRenderer {
     pipeline: RenderPipeline,
     uniform_bind_group: BindGroup,
     uniform_buffer: wgpu::Buffer,
-    //texture_bind_group_layout: BindGroupLayout,
-    texture_manager: TextureManager,
     ui_manager: UiManager,
     commands: Vec<DrawCommand>,
     vertex_buffer: wgpu::Buffer,
-    //vertex_buffer_capacity: usize,
     surface_width: u32,
     surface_height: u32,
 }
@@ -29,7 +27,6 @@ impl UiRenderer {
     const MAX_VERTICES: usize = 100_000;
 
     pub fn new(device: &Device, queue: &Queue, surface_format: TextureFormat, width: u32, height: u32, primitives: Box<dyn Primitives + Send + Sync>) -> Self {
-        // Texture bind group layout
         let texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ui_texture_layout"),
             entries: &[
@@ -52,13 +49,13 @@ impl UiRenderer {
             ],
         });
 
-        // Uniforms
         let proj = Self::ortho_projection(width as f32, height as f32);
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("ui_uniforms"),
             contents: bytemuck::cast_slice(&[Uniforms { proj }]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+
         let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ui_uniform_layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -72,6 +69,7 @@ impl UiRenderer {
                 count: None,
             }],
         });
+
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ui_uniform_bg"),
             layout: &uniform_layout,
@@ -81,7 +79,6 @@ impl UiRenderer {
             }],
         });
 
-        // Pipeline layout
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("ui_pipeline_layout"),
             bind_group_layouts: &[Some(&uniform_layout), Some(&texture_bind_group_layout)],
@@ -131,11 +128,10 @@ impl UiRenderer {
         });
 
         let texture_manager = TextureManager::new(device, &texture_bind_group_layout);
-        //let ui_manager = UiManager::new(primitives);
         let ui_manager = UiManager::new(
             Size::new(width as f32, height as f32),
             texture_manager,
-            primitives,   // теперь UiManager хранит Primitives
+            primitives,
             1.0,
         );
 
@@ -145,12 +141,9 @@ impl UiRenderer {
             pipeline,
             uniform_bind_group,
             uniform_buffer,
-           // texture_bind_group_layout,
-            texture_manager,
             ui_manager,
             commands: Vec::new(),
             vertex_buffer,
-            //vertex_buffer_capacity: Self::MAX_VERTICES,
             surface_width: width,
             surface_height: height,
         }
@@ -186,7 +179,7 @@ impl UiRenderer {
 
     pub fn load_texture(&mut self, name: &str, loader: &dyn TextureLoader) -> Option<u64> {
         let (rgba, w, h) = loader.load_texture_rgba(name)?;
-        Some(self.texture_manager.load_from_rgba(&self.device, &self.queue, &rgba, w, h, name))
+        Some(self.ui_manager.texture_manager_mut().load_from_rgba(&self.device, &self.queue, &rgba, w, h, name))
     }
 
     pub fn load_font(&mut self, name: &str, loader: &dyn FontLoader) -> bool {
@@ -194,7 +187,7 @@ impl UiRenderer {
             Some(data) => data,
             None => return false,
         };
-        let texture_id = self.texture_manager.load_from_rgba(
+        let texture_id = self.ui_manager.texture_manager_mut().load_from_rgba(
             &self.device, &self.queue, &rgba, atlas_w, atlas_h,
             &format!("font_{}", name)
         );
@@ -203,7 +196,6 @@ impl UiRenderer {
             .map(|g| g.height as f32)
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap_or(0.0);
-
 
         let mut chars = std::collections::HashMap::new();
         for raw in raw_glyphs {
@@ -231,11 +223,9 @@ impl UiRenderer {
     }
 
     pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView) {
-        // Layout UI
         self.ui_manager.layout(Size::new(self.surface_width as f32, self.surface_height as f32));
-        // Сбор команд
-        self.ui_manager.render(&mut self.commands, &self.texture_manager);
-        // Рендер
+        self.ui_manager.render(&mut self.commands);
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("UI Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -280,11 +270,12 @@ impl UiRenderer {
         }
         self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        let texture_manager = self.ui_manager.texture_manager();
         for (tid, start, count) in draw_calls {
             let bind_group = if tid == 0 {
-                self.texture_manager.get_fallback_bind_group()
+                texture_manager.get_fallback_bind_group()
             } else {
-                self.texture_manager.get_bind_group(tid).unwrap_or_else(|| self.texture_manager.get_fallback_bind_group())
+                texture_manager.get_bind_group(tid).unwrap_or_else(|| texture_manager.get_fallback_bind_group())
             };
             render_pass.set_bind_group(1, bind_group, &[]);
             render_pass.draw(start..start + count, 0..1);

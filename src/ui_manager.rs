@@ -12,11 +12,8 @@ use crate::drag_drop_manager::DragDropManager;
 pub struct UiManager {
     root: Option<Box<dyn RenderBox>>,
     screen_size: Size,
-    // Фокус
     focused_widget_id: Option<WidgetId>,
-    // DnD – вынесен в отдельный менеджер
     drag_drop: DragDropManager,
-    // Ресурсы
     font_system: FontSystem,
     texture_manager: TextureManager,
     primitives: Box<dyn Primitives>,
@@ -55,9 +52,9 @@ impl UiManager {
         }
     }
 
-    pub fn render(&mut self, commands: &mut Vec<DrawCommand>, texture_manager: &TextureManager) {
+    pub fn render(&mut self, commands: &mut Vec<DrawCommand>) {
         if let Some(root) = &self.root {
-            root.render(commands, self.primitives.as_ref(), texture_manager, self);
+            root.render(commands, self.primitives.as_ref(), &self.texture_manager, self);
         }
     }
 
@@ -86,7 +83,6 @@ impl UiManager {
         match event {
             Event::PointerDown(point) => {
                 self.drag_drop.on_pointer_down(*point, self);
-                // После обработки DnD, дальше обрабатываем фокус (как было раньше)
                 if let Some(widget_id) = self.hit_test(*point) {
                     self.set_focus_to_widget(widget_id);
                     return true;
@@ -133,7 +129,7 @@ impl UiManager {
         }
     }
 
-    // ---------- Фокус (остаётся без изменений) ----------
+    // ---------- Фокус ----------
     fn set_focus_to_widget(&mut self, id: WidgetId) -> bool {
         if self.focused_widget_id == Some(id) {
             return false;
@@ -247,7 +243,7 @@ impl UiManager {
         false
     }
 
-    // ---------- Хит-тестирование (публичные методы для DnD) ----------
+    // ---------- Хит-тестирование ----------
     pub fn hit_test(&self, point: Point) -> Option<WidgetId> {
         self.root.as_ref().and_then(|root| self.hit_test_node(root.as_ref(), point))
     }
@@ -264,31 +260,7 @@ impl UiManager {
         node.widget_id()
     }
 
-    pub fn hit_test_drop_target(&self, point: Point) -> Option<WidgetId> {
-        self.root.as_ref().and_then(|root| self.find_drop_target_node(root.as_ref(), point))
-    }
-
-    fn find_drop_target_node(&self, node: &dyn RenderBox, point: Point) -> Option<WidgetId> {
-        if !node.hit_test(point) {
-            return None;
-        }
-        for child in node.children().iter().rev() {
-            if let Some(id) = self.find_drop_target_node(child.as_ref(), point) {
-                return Some(id);
-            }
-        }
-        // В оригинале здесь была проверка `drag_data`, но теперь это в DragDropManager.
-        // Поскольку drop target проверяет `can_drop`, а данные хранятся в менеджере,
-        // мы не можем получить их здесь. Но для hit_test_drop_target достаточно проверки `can_drop`?
-        // Передавать drag_data из DnDManager неудобно, поэтому лучше оставить только hit_test,
-        // а фильтрацию по can_drop делать в DragDropManager на основе полученного виджета.
-        // Сделаем так: этот метод возвращает просто виджет под точкой,
-        // а в DragDropManager после получения проверяем `can_drop`.
-        // Для упрощения оставим как есть, но уберём зависимость от drag_data.
-        node.widget_id()
-    }
-
-    // ---------- Доступ к виджетам по ID (публичные методы для DnD) ----------
+    // ---------- Доступ к виджетам по ID ----------
     pub fn get_widget_mut(&mut self, id: WidgetId) -> Option<&mut dyn RenderBox> {
         if let Some(root) = &mut self.root {
             Self::find_widget_mut(root.as_mut(), id)
@@ -321,6 +293,14 @@ impl UiManager {
 impl LayoutContext for UiManager {
     fn measure_text(&mut self, text: &str, font_size: f32, max_width: f32) -> Size {
         self.font_system.measure_text(text, font_size, max_width)
+    }
+
+    fn measure_text_with_font(&mut self, font_name: &str, text: &str, font_size: f32, max_width: f32) -> Size {
+        if let Some(font) = self.font_system.get_font(font_name) {
+            self.font_system.measure_text_with_font(font, text, font_size, max_width)
+        } else {
+            Size::zero()
+        }
     }
 
     fn get_image_size(&mut self, path: &str) -> Option<Size> {

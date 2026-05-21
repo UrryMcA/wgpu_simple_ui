@@ -27,7 +27,6 @@ impl DragDropManager {
         }
     }
 
-    /// Вызывается при нажатии кнопки мыши (PointerDown)
     pub fn on_pointer_down(&mut self, point: Point, ui: &mut UiManager) {
         if let Some(widget_id) = ui.hit_test(point) {
             if let Some(widget) = ui.get_widget_mut(widget_id) {
@@ -39,8 +38,6 @@ impl DragDropManager {
         }
     }
 
-    /// Вызывается при отпускании кнопки мыши (PointerUp)
-    /// Возвращает true, если событие было обработано как завершение DnD, иначе false
     pub fn on_pointer_up(&mut self, point: Point, ui: &mut UiManager) -> bool {
         if self.drag_active {
             self.end_drag(point, false, ui);
@@ -51,7 +48,6 @@ impl DragDropManager {
         false
     }
 
-    /// Вызывается при движении мыши (PointerMove)
     pub fn on_pointer_move(&mut self, point: Point, ui: &mut UiManager) -> bool {
         if self.drag_active {
             self.handle_drag_move(point, ui);
@@ -70,37 +66,51 @@ impl DragDropManager {
         false
     }
 
-    /// Обработка события DragMove (уже активное перетаскивание)
     pub fn handle_drag_move(&mut self, point: Point, ui: &mut UiManager) {
-        let new_target = ui.hit_test_drop_target(point);
+        let new_target = ui.hit_test(point);
         if new_target != self.current_drop_target {
             if let Some(old) = self.current_drop_target {
                 ui.send_event_to_widget(old, &Event::DragLeave);
             }
             if let Some(new) = new_target {
                 if let Some(data) = &self.drag_data {
-                    ui.send_event_to_widget(new, &Event::DragEnter {
-                        point,
-                        data: data.clone(),
-                    });
+                    if let Some(widget) = ui.get_widget_mut(new) {
+                        if widget.can_drop(data) {
+                            ui.send_event_to_widget(new, &Event::DragEnter {
+                                point,
+                                data: data.clone(),
+                            });
+                            self.current_drop_target = Some(new);
+                        } else {
+                            self.current_drop_target = None;
+                        }
+                    } else {
+                        self.current_drop_target = None;
+                    }
+                } else {
+                    self.current_drop_target = None;
                 }
+            } else {
+                self.current_drop_target = None;
             }
-            self.current_drop_target = new_target;
         }
         if let Some(source) = self.drag_source_id {
             ui.send_event_to_widget(source, &Event::DragMove(point));
         }
     }
 
-    /// Обработка события DragEnd (завершение перетаскивания)
     pub fn end_drag(&mut self, point: Point, cancelled: bool, ui: &mut UiManager) {
         if !cancelled {
             if let Some(target) = self.current_drop_target {
                 if let Some(data) = &self.drag_data {
-                    ui.send_event_to_widget(target, &Event::DragDrop {
-                        point,
-                        data: data.clone(),
-                    });
+                    if let Some(widget) = ui.get_widget_mut(target) {
+                        if widget.can_drop(data) {
+                            ui.send_event_to_widget(target, &Event::DragDrop {
+                                point,
+                                data: data.clone(),
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -113,7 +123,6 @@ impl DragDropManager {
         self.current_drop_target = None;
     }
 
-    // Приватные вспомогательные методы
     fn start_drag(&mut self, source_id: WidgetId, start_point: Point, ui: &mut UiManager) {
         let data = ui.get_widget_mut(source_id).and_then(|w| w.drag_data());
         if let Some(data) = data {

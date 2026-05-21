@@ -235,12 +235,15 @@ pub trait FontLoader {
 }
 
 pub trait LayoutContext {
-    /// Измерить текст с заданным шрифтом и ограничением по ширине.
+    /// Измерить текст со шрифтом по умолчанию.
     fn measure_text(&mut self, text: &str, font_size: f32, max_width: f32) -> Size;
-    
+
+    /// Измерить текст с указанным шрифтом (по имени).
+    fn measure_text_with_font(&mut self, font_name: &str, text: &str, font_size: f32, max_width: f32) -> Size;
+
     /// Получить размер изображения по пути (если загружено).
     fn get_image_size(&mut self, path: &str) -> Option<Size>;
-    
-    /// (Опционально) доступ к глобальным стилям, масштабу и т.д.
+
+    /// Коэффициент масштабирования (HiDPI).
     fn scale_factor(&self) -> f32;
 }
