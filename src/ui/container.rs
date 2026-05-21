@@ -163,10 +163,8 @@ impl RenderBox for ContainerRenderObject {
 
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
         for child in self.children_mut().iter_mut().rev() {
-            if child.hit_test(event.point().unwrap_or(Point::default())) {
-                if child.handle_event(event, ui_manager) {
-                    return true;
-                }
+           if child.hit_test(event.point().unwrap_or_default()) && child.handle_event(event, ui_manager) {
+                return true;
             }
         }
         false
@@ -192,3 +190,9 @@ impl RenderBox for ContainerRenderObject {
 }
 
 impl Drop for ContainerRenderObject { fn drop(&mut self) {} }
+
+impl Default for Container {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -58,11 +58,10 @@ pub trait RenderBox: Any {
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
         // Сначала пробуем отдать детям (сверху вниз по Z-порядку)
         for child in self.children_mut().iter_mut().rev() {
-            if child.hit_test(event.point().unwrap_or(Point::default())) {
-                if child.handle_event(event, ui_manager) {
-                    return true;
+            if child.hit_test(event.point().unwrap_or_default())
+                && child.handle_event(event, ui_manager) {
+                     return true;
                 }
-            }
         }
         false
     }

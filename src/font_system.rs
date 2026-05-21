@@ -103,6 +103,7 @@ impl FontSystem {
     }
 
     /// Генерирует вершины для текста с указанным шрифтом.
+    #[allow(clippy::too_many_arguments)]
     pub fn generate_text_vertices_with_font(
         &self,
         font: &dyn BitmapFont,
