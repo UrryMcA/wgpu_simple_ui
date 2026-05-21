@@ -1,6 +1,6 @@
 // src/font_system.rs
 use std::collections::HashMap;
-use crate::common::types::{BitmapFont, Size, GlyphInfo, UColor, Rect, TexCoords};
+use crate::common::types::{BitmapFont, Size, UColor, Rect, TexCoords};
 use crate::common::vertex::Vertex;
 use crate::common::primitives::Primitives;
 
@@ -107,7 +107,7 @@ impl FontSystem {
         &self,
         font: &dyn BitmapFont,
         text: &str,
-        mut x: f32,
+        x: f32,
         y: f32,
         scale: f32,
         color: UColor,

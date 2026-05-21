@@ -8,7 +8,7 @@ use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLo
 use crate::common::vertex::{Vertex, DrawCommand};
 use crate::common::primitives::Primitives;
 use crate::texture_manager::TextureManager;
-use crate::ui::UiManager;
+use crate::ui_manager::UiManager;
 
 pub struct UiRenderer {
     device: Device,

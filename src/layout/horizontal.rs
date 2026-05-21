@@ -1,5 +1,8 @@
 use crate::common::{
-    layout_strategy::{LayoutArranger, LayoutMeasurer}, margin_utils::MarginAccumulator, render_box::RenderBox, types::{Alignment, Constraints, LayoutContext, Rect, Size}
+    layout_strategy::{LayoutArranger, LayoutMeasurer},
+    margin_utils::MarginAccumulator,
+    render_box::RenderBox,
+    types::{Alignment, Constraints, LayoutContext, Rect, Size},
 };
 
 #[derive(Clone)]
@@ -32,12 +35,19 @@ impl HorizontalLayout {
 }
 
 impl LayoutMeasurer for HorizontalLayout {
-    fn measure(&mut self, children: &mut [&mut dyn RenderBox], constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
+    fn measure(
+        &mut self,
+        children: &mut [&mut dyn RenderBox],
+        constraints: Constraints,
+        ctx: &mut dyn LayoutContext,
+    ) -> Size {
         let loose = Constraints::loose();
         for child in children.iter_mut() {
             child.layout(loose, ctx);
         }
-        let (total_children_width, max_height) = MarginAccumulator::horizontal_sum(&children.iter().map(|c| &**c).collect::<Vec<_>>());
+        let (total_children_width, max_height) = MarginAccumulator::horizontal_sum(
+            &children.iter().map(|c| &**c).collect::<Vec<_>>()
+        );
         let total_width = total_children_width + self.spacing * (children.len().saturating_sub(1)) as f32;
         constraints.constrain(Size::new(total_width, max_height))
     }
@@ -48,9 +58,10 @@ impl LayoutArranger for HorizontalLayout {
         if children.is_empty() {
             return Vec::new();
         }
-        let total_children_width: f32 = children.iter()
-            .map(|c| c.size().width + c.margin().left + c.margin().right)
-            .sum();
+        // Используем MarginAccumulator для единообразия
+        let (total_children_width, _) = MarginAccumulator::horizontal_sum(
+            &children.iter().map(|c| &**c).collect::<Vec<_>>()
+        );
         let total_spacing = self.spacing * (children.len() - 1) as f32;
         let needed_width = total_children_width + total_spacing;
 
@@ -90,7 +101,6 @@ impl LayoutArranger for HorizontalLayout {
         rects
     }
 }
-
 
 impl Default for HorizontalLayout {
     fn default() -> Self {

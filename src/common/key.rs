@@ -18,6 +18,7 @@ pub enum Key {
     End,
     PageUp,
     PageDown,
+    Space,
 }
 
 impl fmt::Display for Key {

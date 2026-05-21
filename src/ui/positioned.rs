@@ -1,9 +1,10 @@
+// src/widgets/positioned.rs
 use super::widget::{Widget, SingleChildRenderObjectWidget};
 use crate::common::render_box::RenderBox;
 use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
-use crate::ui::UiManager;
+use crate::ui_manager::UiManager;
 
 pub struct Positioned {
     child: Box<dyn Widget>,
@@ -29,7 +30,7 @@ impl Positioned {
 
 impl Widget for Positioned {
     fn min_size(&self) -> Size { self.child.min_size() }
-    fn create_render_object(&self) -> Box<dyn RenderBox> {
+    fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(PositionedRenderObject {
             child: self.child.create_render_object(),
             left: self.left, top: self.top, right: self.right, bottom: self.bottom,
@@ -82,7 +83,7 @@ impl RenderBox for PositionedRenderObject {
     }
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
-    fn render(&self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
+    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
         self.child.render(commands, primitives, textures, ui_manager);
     }
 }

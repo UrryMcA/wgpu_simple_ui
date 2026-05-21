@@ -9,11 +9,11 @@ use crate::layout::grid::GridLayout;
 use crate::layout::horizontal::HorizontalLayout;
 use crate::layout::vertical::VerticalLayout;
 use crate::texture_manager::TextureManager;
-use crate::ui::UiManager;
+use crate::ui_manager::UiManager;
 
 pub struct Container {
     children: Vec<Box<dyn Widget>>,
-    axis: Axis,               // сохраняем для создания стратегии
+    axis: Axis,
     spacing: f32,
     alignment: Alignment,
     margin: EdgeInsets,
@@ -21,8 +21,6 @@ pub struct Container {
     color: Option<UColor>,
     corner_radius: f32,
 }
-
-
 
 impl Container {
     pub fn new() -> Self {
@@ -37,13 +35,11 @@ impl Container {
             corner_radius: 0.0,
         }
     }
-
     pub fn vertical() -> Self { Self::new().axis(Axis::Vertical) }
     pub fn horizontal() -> Self { Self::new().axis(Axis::Horizontal) }
     pub fn grid(cols: usize, rows: usize, spacing_x: f32, spacing_y: f32) -> Self {
         Self::new().axis(Axis::Grid { cols, rows, spacing_x, spacing_y })
     }
-
     pub fn axis(mut self, axis: Axis) -> Self { self.axis = axis; self }
     pub fn spacing(mut self, spacing: f32) -> Self { self.spacing = spacing; self }
     pub fn alignment(mut self, alignment: Alignment) -> Self { self.alignment = alignment; self }
@@ -60,21 +56,19 @@ impl Widget for Container {
     fn margin(&self) -> EdgeInsets { self.margin }
     fn padding(&self) -> EdgeInsets { self.padding }
 
-    fn create_render_object(&self) -> Box<dyn RenderBox> {
-        let children_render: Vec<Box<dyn RenderBox>> = self.children
-            .iter()
+    fn create_render_object(&mut self) -> Box<dyn RenderBox> {
+        let children_render = self.children.iter_mut()
             .map(|w| w.create_render_object())
             .collect();
-
         let strategy: Box<dyn LayoutStrategy> = match self.axis {
             Axis::Vertical => Box::new(VerticalLayout::new().with_spacing(self.spacing).with_cross_alignment(self.alignment)),
             Axis::Horizontal => Box::new(HorizontalLayout::new().with_spacing(self.spacing).with_cross_alignment(self.alignment)),
             Axis::Grid { cols, rows, spacing_x, spacing_y } => Box::new(GridLayout::new(cols, rows, spacing_x, spacing_y)),
         };
-
         Box::new(ContainerRenderObject {
             children: children_render,
             strategy,
+            margin: self.margin,
             padding: self.padding,
             color: self.color,
             corner_radius: self.corner_radius,
@@ -86,16 +80,13 @@ impl Widget for Container {
 }
 
 impl MultiChildRenderObjectWidget for Container {
-    fn children(&self) -> &[Box<dyn Widget>] {
-        &self.children
-    }
+    fn children(&self) -> &[Box<dyn Widget>] { &self.children }
 }
 
-
-/// Объект рендеринга контейнера
 pub struct ContainerRenderObject {
     children: Vec<Box<dyn RenderBox>>,
     strategy: Box<dyn LayoutStrategy>,
+    margin: EdgeInsets,
     padding: EdgeInsets,
     color: Option<UColor>,
     corner_radius: f32,
@@ -107,84 +98,67 @@ pub struct ContainerRenderObject {
 impl ContainerRenderObject {
     fn inner_rect(&self) -> Rect {
         Rect::new(
-            self.position.x + self.padding.left,
-            self.position.y + self.padding.top,
-            self.size.width - self.padding.left - self.padding.right,
-            self.size.height - self.padding.top - self.padding.bottom,
+            self.position.x + self.margin.left + self.padding.left,
+            self.position.y + self.margin.top + self.padding.top,
+            self.size.width - self.margin.left - self.margin.right - self.padding.left - self.padding.right,
+            self.size.height - self.margin.top - self.margin.bottom - self.padding.top - self.padding.bottom,
         )
     }
 }
 
 impl RenderBox for ContainerRenderObject {
     fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
-        // ========== ЭТАП 1: ИЗМЕРЕНИЕ ==========
-        let mut children_refs: Vec<&mut dyn RenderBox> = self.children
-            .iter_mut()
-            .map(|c| c.as_mut())
-            .collect();
-        let inner_size = self.strategy.measure(&mut children_refs, constraints, ctx);
-        // children_refs выходит из области видимости и заимствование заканчивается
-        
-        // ========== ВЫЧИСЛЕНИЕ СОБСТВЕННОГО РАЗМЕРА ==========
+        let inner_constraints = Constraints {
+            min_width: (constraints.min_width - self.margin.left - self.margin.right).max(0.0),
+            max_width: (constraints.max_width - self.margin.left - self.margin.right).max(0.0),
+            min_height: (constraints.min_height - self.margin.top - self.margin.bottom).max(0.0),
+            max_height: (constraints.max_height - self.margin.top - self.margin.bottom).max(0.0),
+        };
+        let mut children_refs: Vec<&mut dyn RenderBox> = self.children.iter_mut().map(|c| c.as_mut()).collect();
+        let inner_size = self.strategy.measure(&mut children_refs, inner_constraints, ctx);
         let padded_size = self.padding.inflate(inner_size);
-        let constrained_size = constraints.constrain(padded_size);
+        let with_margin = Size::new(
+            padded_size.width + self.margin.left + self.margin.right,
+            padded_size.height + self.margin.top + self.margin.bottom,
+        );
+        let constrained_size = constraints.constrain(with_margin);
         self.size = constrained_size;
-        
-        // ========== ЭТАП 2: РАССТАНОВКА ==========
-        let inner_rect = self.inner_rect(); // теперь можно immutable заимствовать self
-        let mut children_refs2: Vec<&mut dyn RenderBox> = self.children
-            .iter_mut()
-            .map(|c| c.as_mut())
-            .collect();
+
+        let inner_rect = self.inner_rect();
+        let mut children_refs2: Vec<&mut dyn RenderBox> = self.children.iter_mut().map(|c| c.as_mut()).collect();
         let child_rects = self.strategy.arrange(&mut children_refs2, inner_rect);
-        
         for (child, rect) in self.children.iter_mut().zip(child_rects) {
             child.set_position(Point::new(rect.x, rect.y));
         }
-        
         self.size
     }
 
-    fn set_position(&mut self, pos: Point) {
-        self.position = pos;
-    }
+    fn set_position(&mut self, pos: Point) { self.position = pos; }
+    fn position(&self) -> Point { self.position }
+    fn size(&self) -> Size { self.size }
 
-    fn position(&self) -> Point {
-        self.position
-    }
-
-    fn size(&self) -> Size {
-        self.size
-    }
-
-    fn render(
-        &self,
-        commands: &mut Vec<DrawCommand>,
-        primitives: &dyn Primitives,
-        textures: &TextureManager,
-        ui_manager: &UiManager,
-    ) {
+    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
         if let Some(color) = self.color {
-            let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
+            let rect = Rect::new(
+                self.position.x + self.margin.left,
+                self.position.y + self.margin.top,
+                self.size.width - self.margin.left - self.margin.right,
+                self.size.height - self.margin.top - self.margin.bottom,
+            );
             let bg = primitives.rounded_rect_vertices(rect, self.corner_radius, color);
             commands.push(DrawCommand { texture_id: 0, vertices: bg });
         }
-        for child in &self.children {
+        // Используем изменяемый итератор
+        for child in &mut self.children {
             child.render(commands, primitives, textures, ui_manager);
         }
     }
 
-    fn children(&self) -> &[Box<dyn RenderBox>] {
-        &self.children
-    }
-
-    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] {
-        &mut self.children
-    }
+    fn children(&self) -> &[Box<dyn RenderBox>] { &self.children }
+    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut self.children }
 
     fn hit_test(&self, point: Point) -> bool {
-        let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-        rect.contains(point)
+        Rect::new(self.position.x, self.position.y, self.size.width, self.size.height).contains(point)
     }
 
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
@@ -198,37 +172,23 @@ impl RenderBox for ContainerRenderObject {
         false
     }
 
-    fn can_focus(&self) -> bool {
-        false
-    }
-
-    fn can_drop(&self, data: &DragData) -> bool {
-        self.children.iter().any(|c| c.can_drop(data))
-    }
-
+    fn can_focus(&self) -> bool { false }
+    fn can_drop(&self, data: &DragData) -> bool { self.children.iter().any(|c| c.can_drop(data)) }
     fn on_drag_enter(&mut self, data: &DragData, point: Point) {
         if let Some(child) = self.children_mut().iter_mut().find(|c| c.hit_test(point)) {
             child.on_drag_enter(data, point);
         }
     }
-
     fn on_drag_leave(&mut self) {
-        for child in self.children_mut() {
-            child.on_drag_leave();
-        }
+        for child in self.children_mut() { child.on_drag_leave(); }
     }
-
     fn on_drop(&mut self, data: &DragData, point: Point) {
         if let Some(child) = self.children_mut().iter_mut().find(|c| c.hit_test(point) && c.can_drop(data)) {
             child.on_drop(data, point);
         }
     }
-
-    fn widget_id(&self) -> Option<WidgetId> {
-        self.id
-    }
+    fn widget_id(&self) -> Option<WidgetId> { self.id }
+    fn margin(&self) -> EdgeInsets { self.margin }
 }
 
-impl Drop for ContainerRenderObject {
-    fn drop(&mut self) {}
-}
+impl Drop for ContainerRenderObject { fn drop(&mut self) {} }

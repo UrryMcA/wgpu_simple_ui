@@ -47,7 +47,6 @@ pub enum DragData {
     Text(String),
     Color([f32; 4]),
     FilePath(std::path::PathBuf),
-    Custom(Box<dyn std::any::Any + Send>),
 }
 
 impl DragData {

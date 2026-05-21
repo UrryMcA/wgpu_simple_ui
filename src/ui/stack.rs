@@ -1,18 +1,17 @@
+// src/widgets/stack.rs
 use super::widget::{Widget, MultiChildRenderObjectWidget};
 use crate::common::render_box::RenderBox;
 use crate::common::types::*;
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
-use crate::ui::UiManager;
+use crate::ui_manager::UiManager;
 
 pub struct Stack {
     children: Vec<Box<dyn Widget>>,
 }
 
 impl Stack {
-    pub fn new(children: Vec<Box<dyn Widget>>) -> Self {
-        Self { children }
-    }
+    pub fn new(children: Vec<Box<dyn Widget>>) -> Self { Self { children } }
 }
 
 impl Widget for Stack {
@@ -26,9 +25,9 @@ impl Widget for Stack {
         }
         Size::new(max_w, max_h)
     }
-    fn create_render_object(&self) -> Box<dyn RenderBox> {
+    fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let mut render_objects = Vec::new();
-        for child in &self.children {
+        for child in &mut self.children {
             render_objects.push(child.create_render_object());
         }
         Box::new(StackRenderObject {
@@ -70,8 +69,8 @@ impl RenderBox for StackRenderObject {
     }
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
-    fn render(&self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
-        for child in &self.children {
+    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
+        for child in &mut self.children {
             child.render(commands, primitives, textures, ui_manager);
         }
     }

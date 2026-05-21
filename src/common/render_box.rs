@@ -5,7 +5,7 @@ use crate::common::key::Key;
 use crate::common::types::{Constraints, EdgeInsets, LayoutContext, Point, Rect, Size};
 use crate::common::vertex::DrawCommand;
 use crate::texture_manager::TextureManager;
-use crate::ui::UiManager;
+use crate::ui_manager::UiManager;
 use std::any::Any;
 
 /// Уникальный идентификатор виджета (для фокуса и хит-тестирования)
@@ -15,7 +15,7 @@ pub type WidgetId = u64;
 pub trait RenderBox: Any {
     // ---------- Обязательные методы из оригинального проекта ----------
     fn render(
-        &self,
+        &mut self,
         commands: &mut Vec<DrawCommand>,
         primitives: &dyn Primitives,
         textures: &TextureManager,
@@ -71,7 +71,7 @@ pub trait RenderBox: Any {
     fn can_focus(&self) -> bool {
         false
     }
-    fn set_focused(&mut self, focused: bool) {}
+    fn set_focused(&mut self, _focused: bool) {}
     fn is_focused(&self) -> bool {
         false
     }

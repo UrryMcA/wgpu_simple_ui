@@ -1,11 +1,11 @@
+// src/widgets/widget.rs
 use crate::common::{render_box::RenderBox, types::*};
-
 
 pub trait Widget {
     fn min_size(&self) -> Size;
     fn margin(&self) -> EdgeInsets { EdgeInsets::default() }
     fn padding(&self) -> EdgeInsets { EdgeInsets::default() }
-    fn create_render_object(&self) -> Box<dyn RenderBox>;
+    fn create_render_object(&mut self) -> Box<dyn RenderBox>;
 }
 
 pub trait LeafRenderObjectWidget: Widget {}

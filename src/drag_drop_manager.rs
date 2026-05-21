@@ -1,8 +1,8 @@
 // src/drag_drop_manager.rs
 use crate::common::event::{DragData, Event};
-use crate::common::render_box::{RenderBox, WidgetId};
+use crate::common::render_box::WidgetId;
 use crate::common::types::Point;
-use crate::ui::UiManager;
+use crate::ui_manager::UiManager;
 
 pub struct DragDropManager {
     drag_active: bool,
@@ -30,14 +30,17 @@ impl DragDropManager {
     pub fn is_drag_active(&self) -> bool {
         self.drag_active
     }
-    
+
     pub fn on_pointer_down(&mut self, point: Point, ui: &mut UiManager) {
         if let Some(widget_id) = ui.hit_test(point) {
-            if let Some(widget) = ui.get_widget_mut(widget_id) {
-                if widget.can_drag() {
-                    self.potential_drag_source = Some(widget_id);
-                    self.drag_start_point = Some(point);
-                }
+            let mut can_drag = false;
+            ui.with_widget_mut(widget_id, |widget| {
+                can_drag = widget.can_drag();
+                true
+            });
+            if can_drag {
+                self.potential_drag_source = Some(widget_id);
+                self.drag_start_point = Some(point);
             }
         }
     }
@@ -78,16 +81,17 @@ impl DragDropManager {
             }
             if let Some(new) = new_target {
                 if let Some(data) = &self.drag_data {
-                    if let Some(widget) = ui.get_widget_mut(new) {
-                        if widget.can_drop(data) {
-                            ui.send_event_to_widget(new, &Event::DragEnter {
-                                point,
-                                data: data.clone(),
-                            });
-                            self.current_drop_target = Some(new);
-                        } else {
-                            self.current_drop_target = None;
-                        }
+                    let mut can_drop = false;
+                    ui.with_widget_mut(new, |widget| {
+                        can_drop = widget.can_drop(data);
+                        true
+                    });
+                    if can_drop {
+                        ui.send_event_to_widget(new, &Event::DragEnter {
+                            point,
+                            data: data.clone(),
+                        });
+                        self.current_drop_target = Some(new);
                     } else {
                         self.current_drop_target = None;
                     }
@@ -107,13 +111,16 @@ impl DragDropManager {
         if !cancelled {
             if let Some(target) = self.current_drop_target {
                 if let Some(data) = &self.drag_data {
-                    if let Some(widget) = ui.get_widget_mut(target) {
-                        if widget.can_drop(data) {
-                            ui.send_event_to_widget(target, &Event::DragDrop {
-                                point,
-                                data: data.clone(),
-                            });
-                        }
+                    let mut can_drop = false;
+                    ui.with_widget_mut(target, |widget| {
+                        can_drop = widget.can_drop(data);
+                        true
+                    });
+                    if can_drop {
+                        ui.send_event_to_widget(target, &Event::DragDrop {
+                            point,
+                            data: data.clone(),
+                        });
                     }
                 }
             }
@@ -128,7 +135,11 @@ impl DragDropManager {
     }
 
     fn start_drag(&mut self, source_id: WidgetId, start_point: Point, ui: &mut UiManager) {
-        let data = ui.get_widget_mut(source_id).and_then(|w| w.drag_data());
+        let mut data = None;
+        ui.with_widget_mut(source_id, |widget| {
+            data = widget.drag_data();
+            true
+        });
         if let Some(data) = data {
             self.drag_active = true;
             self.drag_source_id = Some(source_id);
