@@ -1,0 +1,136 @@
+// src/drag_drop_manager.rs
+use crate::common::event::{DragData, Event};
+use crate::common::render_box::{RenderBox, WidgetId};
+use crate::common::types::Point;
+use crate::ui::UiManager;
+
+pub struct DragDropManager {
+    drag_active: bool,
+    drag_source_id: Option<WidgetId>,
+    drag_data: Option<DragData>,
+    drag_start_point: Option<Point>,
+    potential_drag_source: Option<WidgetId>,
+    current_drop_target: Option<WidgetId>,
+    drag_threshold: f32,
+}
+
+impl DragDropManager {
+    pub fn new() -> Self {
+        Self {
+            drag_active: false,
+            drag_source_id: None,
+            drag_data: None,
+            drag_start_point: None,
+            potential_drag_source: None,
+            current_drop_target: None,
+            drag_threshold: 5.0,
+        }
+    }
+
+    /// Вызывается при нажатии кнопки мыши (PointerDown)
+    pub fn on_pointer_down(&mut self, point: Point, ui: &mut UiManager) {
+        if let Some(widget_id) = ui.hit_test(point) {
+            if let Some(widget) = ui.get_widget_mut(widget_id) {
+                if widget.can_drag() {
+                    self.potential_drag_source = Some(widget_id);
+                    self.drag_start_point = Some(point);
+                }
+            }
+        }
+    }
+
+    /// Вызывается при отпускании кнопки мыши (PointerUp)
+    /// Возвращает true, если событие было обработано как завершение DnD, иначе false
+    pub fn on_pointer_up(&mut self, point: Point, ui: &mut UiManager) -> bool {
+        if self.drag_active {
+            self.end_drag(point, false, ui);
+            return true;
+        }
+        self.potential_drag_source = None;
+        self.drag_start_point = None;
+        false
+    }
+
+    /// Вызывается при движении мыши (PointerMove)
+    pub fn on_pointer_move(&mut self, point: Point, ui: &mut UiManager) -> bool {
+        if self.drag_active {
+            self.handle_drag_move(point, ui);
+            return true;
+        }
+        if let Some(source_id) = self.potential_drag_source {
+            if let Some(start) = self.drag_start_point {
+                let dx = point.x - start.x;
+                let dy = point.y - start.y;
+                if dx.hypot(dy) > self.drag_threshold {
+                    self.start_drag(source_id, start, ui);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Обработка события DragMove (уже активное перетаскивание)
+    pub fn handle_drag_move(&mut self, point: Point, ui: &mut UiManager) {
+        let new_target = ui.hit_test_drop_target(point);
+        if new_target != self.current_drop_target {
+            if let Some(old) = self.current_drop_target {
+                ui.send_event_to_widget(old, &Event::DragLeave);
+            }
+            if let Some(new) = new_target {
+                if let Some(data) = &self.drag_data {
+                    ui.send_event_to_widget(new, &Event::DragEnter {
+                        point,
+                        data: data.clone(),
+                    });
+                }
+            }
+            self.current_drop_target = new_target;
+        }
+        if let Some(source) = self.drag_source_id {
+            ui.send_event_to_widget(source, &Event::DragMove(point));
+        }
+    }
+
+    /// Обработка события DragEnd (завершение перетаскивания)
+    pub fn end_drag(&mut self, point: Point, cancelled: bool, ui: &mut UiManager) {
+        if !cancelled {
+            if let Some(target) = self.current_drop_target {
+                if let Some(data) = &self.drag_data {
+                    ui.send_event_to_widget(target, &Event::DragDrop {
+                        point,
+                        data: data.clone(),
+                    });
+                }
+            }
+        }
+        if let Some(source) = self.drag_source_id {
+            ui.send_event_to_widget(source, &Event::DragEnd { point, cancelled });
+        }
+        self.drag_active = false;
+        self.drag_source_id = None;
+        self.drag_data = None;
+        self.current_drop_target = None;
+    }
+
+    // Приватные вспомогательные методы
+    fn start_drag(&mut self, source_id: WidgetId, start_point: Point, ui: &mut UiManager) {
+        let data = ui.get_widget_mut(source_id).and_then(|w| w.drag_data());
+        if let Some(data) = data {
+            self.drag_active = true;
+            self.drag_source_id = Some(source_id);
+            self.drag_data = Some(data.clone());
+            ui.send_event_to_widget(source_id, &Event::DragStart {
+                point: start_point,
+                source_id,
+                data,
+            });
+        }
+    }
+}
+
+impl Default for DragDropManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}

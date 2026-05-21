@@ -7,6 +7,7 @@ pub mod texture_manager;
 pub mod font_system;
 pub mod renderer;
 pub mod ui;
+pub mod drag_drop_manager;
 pub mod ui_manager;
 
 // Реэкспорты
