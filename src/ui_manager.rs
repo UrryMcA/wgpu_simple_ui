@@ -83,12 +83,13 @@ impl UiManager {
         match event {
             Event::PointerDown(point) => {
                 self.drag_drop.on_pointer_down(*point, self);
+                    if !self.drag_drop.is_drag_active() {
                 if let Some(widget_id) = self.hit_test(*point) {
                     self.set_focus_to_widget(widget_id);
-                    return true;
                 } else {
                     self.clear_focus();
                 }
+            }
                 false
             }
             Event::PointerUp(point) => {

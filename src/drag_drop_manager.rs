@@ -27,6 +27,10 @@ impl DragDropManager {
         }
     }
 
+    pub fn is_drag_active(&self) -> bool {
+        self.drag_active
+    }
+    
     pub fn on_pointer_down(&mut self, point: Point, ui: &mut UiManager) {
         if let Some(widget_id) = ui.hit_test(point) {
             if let Some(widget) = ui.get_widget_mut(widget_id) {

@@ -1,7 +1,9 @@
+// src/layout/vertical.rs
 use crate::common::{
-    layout_strategy::{LayoutArranger},
+    layout_strategy::{LayoutMeasurer, LayoutArranger},
+    margin_utils::MarginAccumulator,
     render_box::RenderBox,
-    types::{Alignment, Rect},
+    types::{Alignment, Constraints, LayoutContext, Rect, Size},
 };
 
 #[derive(Clone)]
@@ -19,17 +21,25 @@ impl VerticalLayout {
             cross_alignment: Alignment::Stretch,
         }
     }
-    pub fn with_spacing(mut self, spacing: f32) -> Self {
-        self.spacing = spacing;
-        self
-    }
-    pub fn with_main_alignment(mut self, a: Alignment) -> Self {
-        self.main_alignment = a;
-        self
-    }
-    pub fn with_cross_alignment(mut self, a: Alignment) -> Self {
-        self.cross_alignment = a;
-        self
+    pub fn with_spacing(mut self, spacing: f32) -> Self { self.spacing = spacing; self }
+    pub fn with_main_alignment(mut self, a: Alignment) -> Self { self.main_alignment = a; self }
+    pub fn with_cross_alignment(mut self, a: Alignment) -> Self { self.cross_alignment = a; self }
+}
+
+impl LayoutMeasurer for VerticalLayout {
+    fn measure(
+        &mut self,
+        children: &mut [&mut dyn RenderBox],
+        constraints: Constraints,
+        ctx: &mut dyn LayoutContext,
+    ) -> Size {
+        let loose = Constraints::loose();
+        for child in children.iter_mut() {
+            child.layout(loose, ctx);
+        }
+        let (max_width, total_children_height) = MarginAccumulator::vertical_sum(&children.iter().map(|c| &**c).collect::<Vec<_>>());
+        let total_height = total_children_height + self.spacing * (children.len().saturating_sub(1)) as f32;
+        constraints.constrain(Size::new(max_width, total_height))
     }
 }
 
@@ -38,9 +48,8 @@ impl LayoutArranger for VerticalLayout {
         if children.is_empty() {
             return Vec::new();
         }
-        let total_children_height: f32 = children.iter()
-            .map(|c| c.size().height + c.margin().top + c.margin().bottom)
-            .sum();
+        // Используем MarginAccumulator для вычисления total_children_height
+        let (_, total_children_height) = MarginAccumulator::vertical_sum(&children.iter().map(|c| &**c).collect::<Vec<_>>());
         let total_spacing = self.spacing * (children.len() - 1) as f32;
         let needed_height = total_children_height + total_spacing;
 
@@ -82,7 +91,5 @@ impl LayoutArranger for VerticalLayout {
 }
 
 impl Default for VerticalLayout {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
