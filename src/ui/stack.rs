@@ -50,11 +50,11 @@ struct StackRenderObject {
 }
 
 impl RenderBox for StackRenderObject {
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let mut max_w: f32 = 0.0;
         let mut max_h: f32 = 0.0;
         for child in &mut self.children {
-            let size = child.layout(constraints);
+            let size = child.layout(constraints, ctx);
             max_w = max_w.max(size.width);
             max_h = max_h.max(size.height);
         }

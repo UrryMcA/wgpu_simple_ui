@@ -106,9 +106,9 @@ impl PanelRenderObject {
 
 impl RenderBox for PanelRenderObject {
     // ---------- Обязательные методы ----------
-    fn layout(&mut self, constraints: Constraints, ui_manager: &mut UiManager) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         if self.id.is_none() {
-            self.id = Some(ui_manager.register_widget(self));
+            //self.id = Some(ui_manager.register_widget(self));
         }
 
         // Учитываем margin и padding при расчёте доступного места для ребёнка
@@ -119,7 +119,7 @@ impl RenderBox for PanelRenderObject {
             bottom: self.margin.bottom + self.padding.bottom,
         };
         let inner_constraints = constraints.shrink(margin_total);
-        let child_size = self.child.layout(inner_constraints, ui_manager);
+        let child_size = self.child.layout(inner_constraints, ctx);
         let total_size = margin_total.inflate(child_size);
         let constrained_size = constraints.constrain(total_size);
         self.size = constrained_size;

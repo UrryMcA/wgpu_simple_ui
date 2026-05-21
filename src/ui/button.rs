@@ -133,10 +133,10 @@ impl ButtonRenderObject {
 
 impl RenderBox for ButtonRenderObject {
     // ---------- Обязательные методы ----------
-    fn layout(&mut self, constraints: Constraints, ui_manager: &mut UiManager) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         // Регистрируем виджет, если ещё не зарегистрирован
         if self.id.is_none() {
-            self.id = Some(ui_manager.register_widget(self));
+            //self.id = Some(ui_manager.register_widget(self));
         }
 
         let inner = Size::new(80.0, 30.0);

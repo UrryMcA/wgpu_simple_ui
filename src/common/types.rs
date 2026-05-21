@@ -142,6 +142,13 @@ pub enum Alignment {
     Stretch,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Axis {
+    Vertical,
+    Horizontal,
+    Grid { cols: usize, rows: usize, spacing_x: f32, spacing_y: f32 },
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Constraints {
     pub min_width: f32,

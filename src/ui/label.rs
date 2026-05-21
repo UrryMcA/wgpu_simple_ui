@@ -56,7 +56,7 @@ struct LabelRenderObject {
 }
 
 impl RenderBox for LabelRenderObject {
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints, _ctx: &mut dyn LayoutContext) -> Size {
         let s = constraints.constrain(Size::new(self.text.len() as f32 * self.font_size * 0.6, self.font_size));
         self.size = s;
         s

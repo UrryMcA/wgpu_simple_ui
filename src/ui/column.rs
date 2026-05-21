@@ -1,6 +1,6 @@
 use super::widget::{Widget, MultiChildRenderObjectWidget};
 use crate::common::render_box::RenderBox;
-use crate::common::types::{Constraints, Point, Size};
+use crate::common::types::{Constraints, LayoutContext, Point, Size};
 use crate::common::{DrawCommand, Primitives};
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
@@ -55,7 +55,7 @@ struct ColumnRenderObject {
 }
 
 impl RenderBox for ColumnRenderObject {
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let mut child_sizes = Vec::new();
         let mut total_height = 0.0;
         let mut max_width: f32 = 0.0;
@@ -67,7 +67,7 @@ impl RenderBox for ColumnRenderObject {
                 min_height: 0.0,
                 max_height: constraints.max_height - total_height - self.spacing * (children_len - 1) as f32,
             };
-            let size = child.layout(child_constraints);
+            let size = child.layout(child_constraints, ctx);
             child_sizes.push(size);
             total_height += size.height;
             max_width = max_width.max(size.width);

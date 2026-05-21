@@ -1,73 +1,108 @@
-use crate::common::{layout_strategy::LayoutStrategy, render_box::RenderBox, types::{Constraints, LayoutContext, Rect}};
-
+use crate::common::{
+    layout_strategy::{LayoutMeasurer, LayoutArranger},
+    render_box::RenderBox,
+    types::{Alignment, Constraints, LayoutContext, Rect, Size},
+};
 
 #[derive(Clone)]
 pub struct HorizontalLayout {
     pub spacing: f32,
-    pub alignment: MainAxisAlignment, // Start, Center, End, SpaceBetween, SpaceAround
+    pub main_alignment: Alignment,
+    pub cross_alignment: Alignment,
 }
 
 impl HorizontalLayout {
     pub fn new() -> Self {
-        Self { spacing: 0.0, alignment: MainAxisAlignment::Start }
+        Self {
+            spacing: 0.0,
+            main_alignment: Alignment::Start,
+            cross_alignment: Alignment::Stretch,
+        }
     }
-    
     pub fn with_spacing(mut self, spacing: f32) -> Self {
         self.spacing = spacing;
         self
     }
+    pub fn with_main_alignment(mut self, a: Alignment) -> Self {
+        self.main_alignment = a;
+        self
+    }
+    pub fn with_cross_alignment(mut self, a: Alignment) -> Self {
+        self.cross_alignment = a;
+        self
+    }
 }
 
-impl LayoutStrategy for HorizontalLayout {
-    fn layout(
+impl LayoutMeasurer for HorizontalLayout {
+    fn measure(
         &mut self,
         children: &mut [&mut dyn RenderBox],
         constraints: Constraints,
         ctx: &mut dyn LayoutContext,
-    ) -> Vec<Rect> {
-        if children.is_empty() { return vec![]; }
-        
-        // 1. Сначала запрашиваем размер каждого ребёнка с ограничением по высоте = max_height,
-        //    а по ширине – flexible (но можно и жестко, если надо).
-        let mut child_sizes = Vec::with_capacity(children.len());
+    ) -> Size {
+        let loose = Constraints::loose();
         for child in children.iter_mut() {
-            let child_constraints = Constraints {
-                min_width: 0.0,
-                max_width: constraints.max_width, // будет уточнено позже, если нужно деление поровну
-                min_height: constraints.min_height,
-                max_height: constraints.max_height,
-            };
-            let size = child.layout(child_constraints, ctx);
-            child_sizes.push(size);
+            child.layout(loose, ctx);
         }
-        
-        // 2. Вычисляем суммарную ширину всех детей + отступы.
-        let total_children_width: f32 = child_sizes.iter().map(|s| s.width).sum();
+        let total_width = children
+            .iter()
+            .map(|c| c.size().width)
+            .sum::<f32>()
+            + self.spacing * (children.len().saturating_sub(1)) as f32;
+        let max_height = children
+            .iter()
+            .map(|c| c.size().height)
+            .fold(0.0, f32::max);
+        constraints.constrain(Size::new(total_width, max_height))
+    }
+}
+
+impl LayoutArranger for HorizontalLayout {
+    fn arrange(&mut self, children: &mut [&mut dyn RenderBox], inner_rect: Rect) -> Vec<Rect> {
+        if children.is_empty() {
+            return Vec::new();
+        }
+        let total_children_width: f32 = children.iter().map(|c| c.size().width).sum();
         let total_spacing = self.spacing * (children.len() - 1) as f32;
         let needed_width = total_children_width + total_spacing;
-        
-        // 3. Определяем начальный сдвиг по X в зависимости от alignment и доступной ширины.
-        let available_width = constraints.max_width.min(constraints.min_width.max(needed_width));
-        let start_x = match self.alignment {
-            MainAxisAlignment::Start => 0.0,
-            MainAxisAlignment::Center => (available_width - needed_width) / 2.0,
-            MainAxisAlignment::End => available_width - needed_width,
-            MainAxisAlignment::SpaceBetween => 0.0, // handled later
-            MainAxisAlignment::SpaceAround => 0.0,
+
+        let start_x = match self.main_alignment {
+            Alignment::Start => inner_rect.x,
+            Alignment::Center => inner_rect.x + (inner_rect.w - needed_width) / 2.0,
+            Alignment::End => inner_rect.x + inner_rect.w - needed_width,
+            Alignment::Stretch => inner_rect.x,
         };
-        
+
         let mut rects = Vec::with_capacity(children.len());
         let mut current_x = start_x;
-        
-        for (i, size) in child_sizes.iter().enumerate() {
-            // SpaceBetween/SpaceAround: пересчитываем интервалы
-            let x = current_x;
-            let y = 0.0; // контейнер сам решит вертикальное выравнивание (или передать в layout)
-            let rect = Rect::new(Point::new(x, y), *size);
-            rects.push(rect);
-            current_x += size.width + self.spacing;
+
+        for child in children {
+            let child_size = child.size();
+            let y = match self.cross_alignment {
+                Alignment::Start => inner_rect.y,
+                Alignment::Center => inner_rect.y + (inner_rect.h - child_size.height) / 2.0,
+                Alignment::End => inner_rect.y + inner_rect.h - child_size.height,
+                Alignment::Stretch => inner_rect.y,
+            };
+            let height = if self.cross_alignment == Alignment::Stretch {
+                inner_rect.h
+            } else {
+                child_size.height
+            };
+            rects.push(Rect::new(
+                current_x,
+                y,
+                child_size.width,
+                height,
+            ));
+            current_x += child_size.width + self.spacing;
         }
-        
         rects
+    }
+}
+
+impl Default for HorizontalLayout {
+    fn default() -> Self {
+        Self::new()
     }
 }

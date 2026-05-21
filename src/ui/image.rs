@@ -43,7 +43,7 @@ struct ImageRenderObject {
 }
 
 impl RenderBox for ImageRenderObject {
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let s = constraints.constrain(self.size);
         self.size = s;
         s

@@ -1,6 +1,6 @@
 // src/widgets/scrollable_container.rs
 use crate::common::render_box::{RenderBox, WidgetId};
-use crate::common::types::{Constraints, Point, Rect, Size};
+use crate::common::types::{Constraints, LayoutContext, Point, Rect, Size};
 use crate::common::vertex::DrawCommand;
 use crate::common::event::Event;
 use crate::texture_manager::TextureManager;
@@ -51,15 +51,15 @@ impl ScrollableContainer {
 }
 
 impl RenderBox for ScrollableContainer {
-    fn layout(&mut self, constraints: Constraints, ui_manager: &mut UiManager) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         if self.id.is_none() {
-            self.id = Some(ui_manager.register_widget(self));
+            //self.id = Some(ui_manager.register_widget(self));
         }
         // Запоминаем размер области просмотра (ограничение)
         self.viewport_size = constraints.max;
         // Даём ребёнку бесконечные ограничения, чтобы он мог быть больше viewport
-        let child_constraints = Constraints::loose(Size::new(f32::INFINITY, f32::INFINITY));
-        let child_size = self.child.layout(child_constraints, ui_manager);
+        let child_constraints = Constraints::loose();
+        let child_size = self.child.layout(child_constraints, ctx);
         // Размер контейнера равен viewport (он не может быть больше)
         let size = constraints.constrain(self.viewport_size);
         self.viewport_size = size;

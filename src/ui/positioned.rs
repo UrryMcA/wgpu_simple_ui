@@ -53,9 +53,9 @@ struct PositionedRenderObject {
 }
 
 impl RenderBox for PositionedRenderObject {
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let child_constraints = Constraints::loose();
-        let child_size = self.child.layout(child_constraints);
+        let child_size = self.child.layout(child_constraints, ctx);
         let final_width = self.width.unwrap_or_else(|| {
             if let (Some(l), Some(r)) = (self.left, self.right) {
                 (constraints.max_width - l - r).max(0.0)

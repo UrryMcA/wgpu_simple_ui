@@ -55,7 +55,7 @@ struct RowRenderObject {
 }
 
 impl RenderBox for RowRenderObject {
-    fn layout(&mut self, constraints: Constraints) -> Size {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let mut child_sizes = Vec::new();
         let mut total_width = 0.0;
         let mut max_height: f32 = 0.0;
@@ -67,7 +67,7 @@ impl RenderBox for RowRenderObject {
                 min_height: constraints.min_height,
                 max_height: constraints.max_height,
             };
-            let size = child.layout(child_constraints);
+            let size = child.layout(child_constraints, ctx);
             child_sizes.push(size);
             total_width += size.width;
             max_height = max_height.max(size.height);

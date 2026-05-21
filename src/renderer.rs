@@ -131,7 +131,13 @@ impl UiRenderer {
         });
 
         let texture_manager = TextureManager::new(device, &texture_bind_group_layout);
-        let ui_manager = UiManager::new(primitives);
+        //let ui_manager = UiManager::new(primitives);
+        let ui_manager = UiManager::new(
+            Size::new(width as f32, height as f32),
+            texture_manager,
+            primitives,   // теперь UiManager хранит Primitives
+            1.0,
+        );
 
         Self {
             device: device.clone(),

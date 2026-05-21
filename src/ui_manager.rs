@@ -2,16 +2,17 @@
 use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
 use crate::common::render_box::{RenderBox, WidgetId};
-use crate::common::types::{Constraints, LayoutContext, Point, Size};
-use std::collections::HashMap;
+use crate::common::types::{BitmapFont, Constraints, LayoutContext, Point, Size};
+use crate::common::primitives::Primitives;
+use crate::common::vertex::DrawCommand;
+use crate::texture_manager::TextureManager;
+use crate::font_system::FontSystem;
 
 pub struct UiManager {
     root: Option<Box<dyn RenderBox>>,
     screen_size: Size,
     // Фокус
     focused_widget_id: Option<WidgetId>,
-    widgets: HashMap<WidgetId, *mut dyn RenderBox>,
-    next_widget_id: WidgetId,
     // DnD
     drag_active: bool,
     drag_source_id: Option<WidgetId>,
@@ -20,16 +21,24 @@ pub struct UiManager {
     potential_drag_source: Option<WidgetId>,
     current_drop_target: Option<WidgetId>,
     drag_threshold: f32,
+    // Ресурсы
+    font_system: FontSystem,
+    texture_manager: TextureManager,
+    primitives: Box<dyn Primitives>,
+    scale_factor: f32,
 }
 
 impl UiManager {
-    pub fn new(screen_size: Size) -> Self {
+    pub fn new(
+        screen_size: Size,
+        texture_manager: TextureManager,
+        primitives: Box<dyn Primitives>,
+        scale_factor: f32,
+    ) -> Self {
         Self {
             root: None,
             screen_size,
             focused_widget_id: None,
-            widgets: HashMap::new(),
-            next_widget_id: 1,
             drag_active: false,
             drag_source_id: None,
             drag_data: None,
@@ -37,6 +46,10 @@ impl UiManager {
             potential_drag_source: None,
             current_drop_target: None,
             drag_threshold: 5.0,
+            font_system: FontSystem::new(),
+            texture_manager,
+            primitives,
+            scale_factor,
         }
     }
 
@@ -44,29 +57,42 @@ impl UiManager {
         self.root = Some(root);
     }
 
-    pub fn layout(&mut self) {
-        if let Some(root) = &mut self.root {
-            let constraints = Constraints::tight(self.screen_size);
+    pub fn layout(&mut self, screen_size: Size) {
+        self.screen_size = screen_size;
+        if let Some(mut root) = self.root.take() {
+            let constraints = Constraints::tight(self.screen_size.width, self.screen_size.height);
             root.layout(constraints, self);
+            self.root = Some(root);
         }
     }
 
-    pub fn draw(&mut self) {
+    pub fn render(&mut self, commands: &mut Vec<DrawCommand>, texture_manager: &TextureManager) {
         if let Some(root) = &self.root {
-            root.render(&mut Vec::new(), 
-                    &crate::common::primitives::Primitives::default(),
-                     &crate::texture_manager::TextureManager::new(), 
-                     self);
+            root.render(commands, self.primitives.as_ref(), texture_manager, self);
         }
     }
 
-    pub fn register_widget(&mut self, widget: &mut dyn RenderBox) -> WidgetId {
-        let id = self.next_widget_id;
-        self.next_widget_id += 1;
-        self.widgets.insert(id, widget as *mut dyn RenderBox);
-        id
+    pub fn add_font(&mut self, name: String, font: Box<dyn BitmapFont>) {
+        self.font_system.add_font(name, font);
     }
 
+    pub fn font_system(&self) -> &FontSystem {
+        &self.font_system
+    }
+
+    pub fn font_system_mut(&mut self) -> &mut FontSystem {
+        &mut self.font_system
+    }
+
+    pub fn texture_manager(&self) -> &TextureManager {
+        &self.texture_manager
+    }
+
+    pub fn texture_manager_mut(&mut self) -> &mut TextureManager {
+        &mut self.texture_manager
+    }
+
+    // ---------- Обработка событий ----------
     pub fn process_event(&mut self, event: &Event) -> bool {
         match event {
             Event::PointerDown(point) => self.on_pointer_down(*point),
@@ -82,8 +108,7 @@ impl UiManager {
         }
     }
 
-    // ---------- Приватные обработчики ----------
-    fn on_pointer_down(&mut self, point: Point) {
+    fn on_pointer_down(&mut self, point: Point) -> bool {
         if let Some(widget_id) = self.hit_test(point) {
             if let Some(widget) = self.get_widget_mut(widget_id) {
                 if widget.can_drag() {
@@ -92,42 +117,50 @@ impl UiManager {
                 }
             }
             self.set_focus_to_widget(widget_id);
-        } else {
-            self.clear_focus();
+            return true;
         }
+        self.clear_focus();
+        false
     }
 
-    fn on_pointer_up(&mut self, point: Point) {
+    fn on_pointer_up(&mut self, point: Point) -> bool {
         if self.drag_active {
             self.end_drag(point, false);
-        } else {
-            if let Some(widget_id) = self.hit_test(point) {
-                self.send_event_to_widget(widget_id, &Event::Click(point));
-            }
+            return true;
+        }
+        if let Some(widget_id) = self.hit_test(point) {
+            self.send_event_to_widget(widget_id, &Event::Click(point));
+            return true;
         }
         self.potential_drag_source = None;
         self.drag_start_point = None;
+        false
     }
 
-    fn on_pointer_move(&mut self, point: Point) {
+    fn on_pointer_move(&mut self, point: Point) -> bool {
         if self.drag_active {
             self.handle_drag_move(point);
-        } else if let Some(source_id) = self.potential_drag_source {
+            return true;
+        }
+        if let Some(source_id) = self.potential_drag_source {
             if let Some(start) = self.drag_start_point {
                 let dx = point.x - start.x;
                 let dy = point.y - start.y;
                 if dx.hypot(dy) > self.drag_threshold {
                     self.start_drag(source_id, start);
+                    return true;
                 }
             }
         }
+        false
     }
 
-    fn on_mouse_wheel(&mut self, delta_x: f32, delta_y: f32, point: Point) {
-        // Находим виджет под курсором и отправляем событие
+    fn on_mouse_wheel(&mut self, delta_x: f32, delta_y: f32, point: Point) -> bool {
         if let Some(widget_id) = self.hit_test(point) {
             self.send_event_to_widget(widget_id, &Event::MouseWheel { delta_x, delta_y, point });
+            return true;
         }
+        false
     }
 
     fn start_drag(&mut self, source_id: WidgetId, start_point: Point) {
@@ -144,7 +177,7 @@ impl UiManager {
         }
     }
 
-    fn handle_drag_move(&mut self, point: Point) {
+    fn handle_drag_move(&mut self, point: Point) -> bool {
         let new_target = self.hit_test_drop_target(point);
         if new_target != self.current_drop_target {
             if let Some(old) = self.current_drop_target {
@@ -163,9 +196,10 @@ impl UiManager {
         if let Some(source) = self.drag_source_id {
             self.send_event_to_widget(source, &Event::DragMove(point));
         }
+        true
     }
 
-    fn end_drag(&mut self, point: Point, cancelled: bool) {
+    fn end_drag(&mut self, point: Point, cancelled: bool) -> bool {
         if !cancelled {
             if let Some(target) = self.current_drop_target {
                 if let Some(data) = &self.drag_data {
@@ -183,6 +217,7 @@ impl UiManager {
         self.drag_source_id = None;
         self.drag_data = None;
         self.current_drop_target = None;
+        true
     }
 
     // ---------- Фокус ----------
@@ -230,8 +265,8 @@ impl UiManager {
         let all = self.collect_focusable();
         let current_idx = self.focused_widget_id.and_then(|id| all.iter().position(|&i| i == id));
         let prev_idx = match current_idx {
-            Some(idx) if idx > 0 => idx - 1,
             Some(0) => all.len().saturating_sub(1),
+            Some(idx) => idx - 1,
             None => 0,
         };
         if let Some(&prev_id) = all.get(prev_idx) {
@@ -337,9 +372,25 @@ impl UiManager {
         None
     }
 
-    // ---------- Вспомогательные ----------
+    // ---------- Доступ к виджетам по ID (обход дерева) ----------
     fn get_widget_mut(&mut self, id: WidgetId) -> Option<&mut dyn RenderBox> {
-        self.widgets.get(&id).copied().and_then(|ptr| unsafe { ptr.as_mut() })
+        if let Some(root) = &mut self.root {
+            Self::find_widget_mut(root.as_mut(), id)
+        } else {
+            None
+        }
+    }
+
+    fn find_widget_mut(node: &mut dyn RenderBox, id: WidgetId) -> Option<&mut dyn RenderBox> {
+        if node.widget_id() == Some(id) {
+            return Some(node);
+        }
+        for child in node.children_mut() {
+            if let Some(found) = Self::find_widget_mut(child.as_mut(), id) {
+                return Some(found);
+            }
+        }
+        None
     }
 
     fn send_event_to_widget(&mut self, id: WidgetId, event: &Event) -> bool {
@@ -353,11 +404,13 @@ impl UiManager {
 
 impl LayoutContext for UiManager {
     fn measure_text(&mut self, text: &str, font_size: f32, max_width: f32) -> Size {
-        self.font_system.measure(text, font_size, max_width)
+        self.font_system.measure_text(text, font_size, max_width)
     }
+
     fn get_image_size(&mut self, path: &str) -> Option<Size> {
         self.texture_manager.get_size(path)
     }
+
     fn scale_factor(&self) -> f32 {
         self.scale_factor
     }
