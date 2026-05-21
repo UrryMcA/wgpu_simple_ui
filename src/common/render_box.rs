@@ -2,7 +2,7 @@ use crate::common::Primitives;
 // src/common/render_box.rs
 use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
-use crate::common::types::{Constraints, LayoutContext, Point, Rect, Size};
+use crate::common::types::{Constraints, EdgeInsets, LayoutContext, Point, Rect, Size};
 use crate::common::vertex::DrawCommand;
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
@@ -126,6 +126,9 @@ pub trait RenderBox: Any {
         )
     }
 
+    fn margin(&self) -> EdgeInsets {
+        EdgeInsets::default()
+    }
 
 
 }

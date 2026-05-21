@@ -19,19 +19,20 @@ impl GridLayout {
 }
 
 impl LayoutMeasurer for GridLayout {
-    fn measure(
-        &mut self,
-        children: &mut [&mut dyn RenderBox],
-        constraints: Constraints,
-        ctx: &mut dyn LayoutContext,
-    ) -> Size {
+    fn measure(&mut self, children: &mut [&mut dyn RenderBox], constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let loose = Constraints::loose();
         for child in children.iter_mut() {
             child.layout(loose, ctx);
         }
-        // Находим максимальную ширину и высоту среди всех детей
-        let max_child_width = children.iter().map(|c| c.size().width).fold(0.0, f32::max);
-        let max_child_height = children.iter().map(|c| c.size().height).fold(0.0, f32::max);
+        let mut max_child_width: f32 = 0.0;
+        let mut max_child_height: f32 = 0.0;
+        for child in children.iter() {
+            let margin = child.margin();
+            let w = child.size().width + margin.left + margin.right;
+            let h = child.size().height + margin.top + margin.bottom;
+            max_child_width = max_child_width.max(w);
+            max_child_height = max_child_height.max(h);
+        }
         let total_width = self.cols as f32 * max_child_width + (self.cols - 1) as f32 * self.spacing_x;
         let total_height = self.rows as f32 * max_child_height + (self.rows - 1) as f32 * self.spacing_y;
         constraints.constrain(Size::new(total_width, total_height))
@@ -41,14 +42,30 @@ impl LayoutMeasurer for GridLayout {
 impl LayoutArranger for GridLayout {
     fn arrange(&mut self, children: &mut [&mut dyn RenderBox], inner_rect: Rect) -> Vec<Rect> {
         let mut rects = Vec::with_capacity(children.len());
-        let cell_width = inner_rect.w / self.cols as f32;
-        let cell_height = inner_rect.h / self.rows as f32;
+        // Найдём максимальный размер среди детей с учётом margin
+        let mut max_child_width: f32 = 0.0;
+        let mut max_child_height: f32 = 0.0;
+        for child in children.iter() {
+            let margin = child.margin();
+            let w = child.size().width + margin.left + margin.right;
+            let h = child.size().height + margin.top + margin.bottom;
+            max_child_width = max_child_width.max(w);
+            max_child_height = max_child_height.max(h);
+        }
+        let cell_width = max_child_width;
+        let cell_height = max_child_height;
+        // Если inner_rect задаёт другую область, то можно масштабировать, но упростим
+        let start_x = inner_rect.x;
+        let start_y = inner_rect.y;
         for (idx, child) in children.iter().enumerate() {
             let row = idx / self.cols;
             let col = idx % self.cols;
-            let x = inner_rect.x + col as f32 * (cell_width + self.spacing_x);
-            let y = inner_rect.y + row as f32 * (cell_height + self.spacing_y);
-            rects.push(Rect::new(x, y, cell_width, cell_height));
+            let margin = child.margin();
+            let x = start_x + col as f32 * (cell_width + self.spacing_x) + margin.left;
+            let y = start_y + row as f32 * (cell_height + self.spacing_y) + margin.top;
+            let width = (cell_width - margin.left - margin.right).max(0.0);
+            let height = (cell_height - margin.top - margin.bottom).max(0.0);
+            rects.push(Rect::new(x, y, width, height));
         }
         rects
     }

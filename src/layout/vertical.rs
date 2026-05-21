@@ -1,7 +1,7 @@
 use crate::common::{
-    layout_strategy::{LayoutMeasurer, LayoutArranger},
+    layout_strategy::{LayoutArranger},
     render_box::RenderBox,
-    types::{Alignment, Constraints, LayoutContext, Rect, Size},
+    types::{Alignment, Rect},
 };
 
 #[derive(Clone)]
@@ -33,36 +33,14 @@ impl VerticalLayout {
     }
 }
 
-impl LayoutMeasurer for VerticalLayout {
-    fn measure(
-        &mut self,
-        children: &mut [&mut dyn RenderBox],
-        constraints: Constraints,
-        ctx: &mut dyn LayoutContext,
-    ) -> Size {
-        let loose = Constraints::loose();
-        for child in children.iter_mut() {
-            child.layout(loose, ctx);
-        }
-        let total_height = children
-            .iter()
-            .map(|c| c.size().height)
-            .sum::<f32>()
-            + self.spacing * (children.len().saturating_sub(1)) as f32;
-        let max_width = children
-            .iter()
-            .map(|c| c.size().width)
-            .fold(0.0, f32::max);
-        constraints.constrain(Size::new(max_width, total_height))
-    }
-}
-
 impl LayoutArranger for VerticalLayout {
     fn arrange(&mut self, children: &mut [&mut dyn RenderBox], inner_rect: Rect) -> Vec<Rect> {
         if children.is_empty() {
             return Vec::new();
         }
-        let total_children_height: f32 = children.iter().map(|c| c.size().height).sum();
+        let total_children_height: f32 = children.iter()
+            .map(|c| c.size().height + c.margin().top + c.margin().bottom)
+            .sum();
         let total_spacing = self.spacing * (children.len() - 1) as f32;
         let needed_height = total_children_height + total_spacing;
 
@@ -77,25 +55,27 @@ impl LayoutArranger for VerticalLayout {
         let mut current_y = start_y;
 
         for child in children {
+            let margin = child.margin();
             let child_size = child.size();
             let x = match self.cross_alignment {
-                Alignment::Start => inner_rect.x,
+                Alignment::Start => inner_rect.x + margin.left,
                 Alignment::Center => inner_rect.x + (inner_rect.w - child_size.width) / 2.0,
-                Alignment::End => inner_rect.x + inner_rect.w - child_size.width,
-                Alignment::Stretch => inner_rect.x,
+                Alignment::End => inner_rect.x + inner_rect.w - child_size.width - margin.right,
+                Alignment::Stretch => inner_rect.x + margin.left,
             };
             let width = if self.cross_alignment == Alignment::Stretch {
-                inner_rect.w
+                (inner_rect.w - margin.left - margin.right).max(0.0)
             } else {
                 child_size.width
             };
-            rects.push(Rect::new(
+            let rect = Rect::new(
                 x,
-                current_y,
+                current_y + margin.top,
                 width,
                 child_size.height,
-            ));
-            current_y += child_size.height + self.spacing;
+            );
+            rects.push(rect);
+            current_y += child_size.height + margin.top + margin.bottom + self.spacing;
         }
         rects
     }

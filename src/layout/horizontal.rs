@@ -1,7 +1,5 @@
 use crate::common::{
-    layout_strategy::{LayoutMeasurer, LayoutArranger},
-    render_box::RenderBox,
-    types::{Alignment, Constraints, LayoutContext, Rect, Size},
+    layout_strategy::{LayoutArranger, LayoutMeasurer}, margin_utils::MarginAccumulator, render_box::RenderBox, types::{Alignment, Constraints, LayoutContext, Rect, Size}
 };
 
 #[derive(Clone)]
@@ -34,25 +32,13 @@ impl HorizontalLayout {
 }
 
 impl LayoutMeasurer for HorizontalLayout {
-    fn measure(
-        &mut self,
-        children: &mut [&mut dyn RenderBox],
-        constraints: Constraints,
-        ctx: &mut dyn LayoutContext,
-    ) -> Size {
+    fn measure(&mut self, children: &mut [&mut dyn RenderBox], constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
         let loose = Constraints::loose();
         for child in children.iter_mut() {
             child.layout(loose, ctx);
         }
-        let total_width = children
-            .iter()
-            .map(|c| c.size().width)
-            .sum::<f32>()
-            + self.spacing * (children.len().saturating_sub(1)) as f32;
-        let max_height = children
-            .iter()
-            .map(|c| c.size().height)
-            .fold(0.0, f32::max);
+        let (total_children_width, max_height) = MarginAccumulator::horizontal_sum(&children.iter().map(|c| &**c).collect::<Vec<_>>());
+        let total_width = total_children_width + self.spacing * (children.len().saturating_sub(1)) as f32;
         constraints.constrain(Size::new(total_width, max_height))
     }
 }
@@ -62,7 +48,9 @@ impl LayoutArranger for HorizontalLayout {
         if children.is_empty() {
             return Vec::new();
         }
-        let total_children_width: f32 = children.iter().map(|c| c.size().width).sum();
+        let total_children_width: f32 = children.iter()
+            .map(|c| c.size().width + c.margin().left + c.margin().right)
+            .sum();
         let total_spacing = self.spacing * (children.len() - 1) as f32;
         let needed_width = total_children_width + total_spacing;
 
@@ -77,29 +65,32 @@ impl LayoutArranger for HorizontalLayout {
         let mut current_x = start_x;
 
         for child in children {
+            let margin = child.margin();
             let child_size = child.size();
             let y = match self.cross_alignment {
-                Alignment::Start => inner_rect.y,
+                Alignment::Start => inner_rect.y + margin.top,
                 Alignment::Center => inner_rect.y + (inner_rect.h - child_size.height) / 2.0,
-                Alignment::End => inner_rect.y + inner_rect.h - child_size.height,
-                Alignment::Stretch => inner_rect.y,
+                Alignment::End => inner_rect.y + inner_rect.h - child_size.height - margin.bottom,
+                Alignment::Stretch => inner_rect.y + margin.top,
             };
             let height = if self.cross_alignment == Alignment::Stretch {
-                inner_rect.h
+                (inner_rect.h - margin.top - margin.bottom).max(0.0)
             } else {
                 child_size.height
             };
-            rects.push(Rect::new(
-                current_x,
+            let rect = Rect::new(
+                current_x + margin.left,
                 y,
                 child_size.width,
                 height,
-            ));
-            current_x += child_size.width + self.spacing;
+            );
+            rects.push(rect);
+            current_x += child_size.width + margin.left + margin.right + self.spacing;
         }
         rects
     }
 }
+
 
 impl Default for HorizontalLayout {
     fn default() -> Self {
