@@ -10,6 +10,9 @@ pub mod stack;
 pub mod positioned;
 pub mod bitmap_font;
 pub mod hit_tester;
+pub mod layout;
+pub mod panel;
+pub mod scrollable_container;
 
 pub use widget::{Widget, SingleChildRenderObjectWidget, MultiChildRenderObjectWidget, LeafRenderObjectWidget};
 pub use ui_manager::UiManager;
