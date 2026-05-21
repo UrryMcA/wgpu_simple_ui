@@ -1,12 +1,11 @@
 // src/widgets/panel.rs
 use super::widget::Widget;
 use crate::common::render_box::RenderBox;
-use crate::common::types::*;
+use crate::common::{DrawCommand, Primitives, types::*};
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
-use crate::widgets::container::{Container, Axis};
 
 /// Панель — контейнер с фоном, скруглёнными углами и отступами.
 /// Может содержать любого одного дочернего виджета (или несколько, если использовать контейнер).

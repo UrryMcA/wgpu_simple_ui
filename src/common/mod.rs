@@ -4,6 +4,8 @@ pub mod types;
 pub mod render_box;
 pub mod key;
 pub mod event;
+pub mod layout_strategy;
+
 
 // Реэкспортируем всё необходимое для обратной совместимости
 pub use vertex::{Vertex, DrawCommand};

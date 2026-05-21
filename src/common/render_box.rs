@@ -1,7 +1,8 @@
+use crate::common::Primitives;
 // src/common/render_box.rs
 use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
-use crate::common::types::{Constraints, Point, Rect, Size};
+use crate::common::types::{Constraints, LayoutContext, Point, Rect, Size};
 use crate::common::vertex::DrawCommand;
 use crate::texture_manager::TextureManager;
 use crate::ui::UiManager;
@@ -13,10 +14,6 @@ pub type WidgetId = u64;
 /// Основной трейт для всех объектов рендеринга.
 pub trait RenderBox: Any {
     // ---------- Обязательные методы из оригинального проекта ----------
-    fn layout(&mut self, constraints: Constraints, ui_manager: &mut UiManager) -> Size;
-    fn set_position(&mut self, pos: Point);
-    fn position(&self) -> Point;
-    fn size(&self) -> Size;
     fn render(
         &self,
         commands: &mut Vec<DrawCommand>,
@@ -24,6 +21,19 @@ pub trait RenderBox: Any {
         textures: &TextureManager,
         ui_manager: &UiManager,
     );
+
+    /// Вычисляет размер виджета в соответствии с constraints, используя контекст.
+    /// После вызова layout, виджет должен запомнить свой final_size.
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size;
+    
+    /// Установить позицию (вызывается контейнером после layout).
+    fn set_position(&mut self, position: Point);
+    
+    /// Получить текущий размер (после layout).
+    fn size(&self) -> Size;
+    
+    /// Получить позицию.
+    fn position(&self) -> Point;    
 
     // ---------- Методы для работы с деревом ----------
     fn children(&self) -> &[Box<dyn RenderBox>] {
@@ -115,4 +125,7 @@ pub trait RenderBox: Any {
             self.size().height,
         )
     }
+
+
+
 }

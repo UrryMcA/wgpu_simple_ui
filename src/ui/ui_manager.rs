@@ -1,8 +1,8 @@
 // src/ui/ui_manager.rs
 use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
-use crate::common::types::{Point, Size, Constraints};
-use crate::render::render_box::{RenderBox, WidgetId};
+use crate::common::render_box::{RenderBox, WidgetId};
+use crate::common::types::{Constraints, LayoutContext, Point, Size};
 use std::collections::HashMap;
 
 pub struct UiManager {
@@ -53,7 +53,10 @@ impl UiManager {
 
     pub fn draw(&mut self) {
         if let Some(root) = &self.root {
-            root.render(&mut Vec::new(), &crate::common::primitives::Primitives::default(), &crate::texture_manager::TextureManager::new(), self);
+            root.render(&mut Vec::new(), 
+                    &crate::common::primitives::Primitives::default(),
+                     &crate::texture_manager::TextureManager::new(), 
+                     self);
         }
     }
 
@@ -345,5 +348,17 @@ impl UiManager {
         } else {
             false
         }
+    }
+}
+
+impl LayoutContext for UiManager {
+    fn measure_text(&mut self, text: &str, font_size: f32, max_width: f32) -> Size {
+        self.font_system.measure(text, font_size, max_width)
+    }
+    fn get_image_size(&mut self, path: &str) -> Option<Size> {
+        self.texture_manager.get_size(path)
+    }
+    fn scale_factor(&self) -> f32 {
+        self.scale_factor
     }
 }

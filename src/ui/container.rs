@@ -1,7 +1,7 @@
 // src/widgets/container.rs
 use super::widget::{Widget, MultiChildRenderObjectWidget};
 use crate::common::render_box::{RenderBox, WidgetId};
-use crate::common::types::*;
+use crate::common::{Primitives, types::*};
 use crate::common::vertex::DrawCommand;
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
@@ -149,7 +149,11 @@ impl Widget for Container {
     }
 }
 
-impl MultiChildRenderObjectWidget for Container {}
+impl MultiChildRenderObjectWidget for Container {
+    fn children(&self) -> &[Box<dyn Widget>] {
+        todo!()
+    }
+}
 
 /// Объект рендеринга контейнера
 struct ContainerRenderObject {
@@ -199,7 +203,7 @@ impl RenderBox for ContainerRenderObject {
         }
 
         // 1. Сначала вычисляем размеры детей без ограничений (каждый получает loose constraints)
-        let child_constraints = Constraints::loose(Size::new(f32::INFINITY, f32::INFINITY));
+        let child_constraints = Constraints::loose();
         for child in &mut self.children {
             child.layout(child_constraints, ui_manager);
         }

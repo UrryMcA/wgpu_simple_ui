@@ -6,8 +6,8 @@ pub struct Rect {
 }
 impl Rect {
     pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self { Self { x, y, w, h } }
-    pub fn contains(&self, px: f32, py: f32) -> bool {
-        px >= self.x && px <= self.x + self.w && py >= self.y && py <= self.y + self.h
+    pub fn contains(&self, point: Point) -> bool {
+        point.x >= self.x && point.x <= self.x + self.w && point.y >= self.y && point.y <= self.y + self.h
     }
 }
 
@@ -121,6 +121,7 @@ impl Size {
             height: self.height + margin.top + margin.bottom,
         }
     }
+    pub fn zero() -> Self { Self { width: 0.0, height: 0.0 } }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -133,6 +134,13 @@ impl Point {
 }
 
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Alignment {
+    Start,
+    Center,
+    End,
+    Stretch,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Constraints {
@@ -217,4 +225,15 @@ pub trait TextureLoader {
 /// Загрузчик шрифтов: возвращает RGBA атласа, размеры атласа и список сырых глифов.
 pub trait FontLoader {
     fn load_font_data(&self, name: &str) -> Option<(Vec<u8>, u32, u32, Vec<RawGlyph>)>;
+}
+
+pub trait LayoutContext {
+    /// Измерить текст с заданным шрифтом и ограничением по ширине.
+    fn measure_text(&mut self, text: &str, font_size: f32, max_width: f32) -> Size;
+    
+    /// Получить размер изображения по пути (если загружено).
+    fn get_image_size(&mut self, path: &str) -> Option<Size>;
+    
+    /// (Опционально) доступ к глобальным стилям, масштабу и т.д.
+    fn scale_factor(&self) -> f32;
 }
