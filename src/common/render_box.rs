@@ -1,9 +1,7 @@
-use crate::common::Primitives;
 use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
+use crate::common::render_context::RenderContext;
 use crate::common::types::{Constraints, EdgeInsets, LayoutContext, Point, Rect, Size};
-use crate::common::vertex::DrawCommand;
-use crate::texture_manager::TextureManager;
 use crate::ui_manager::UiManager;
 use std::any::Any;
 
@@ -13,13 +11,7 @@ pub type WidgetId = u64;
 /// Основной трейт для всех объектов рендеринга.
 pub trait RenderBox: Any {
     // ---------- Обязательные методы ----------
-    fn render(
-        &mut self,
-        commands: &mut Vec<DrawCommand>,
-        primitives: &dyn Primitives,
-        textures: &TextureManager,
-        ui_manager: &mut UiManager,   // изменено: &mut вместо &
-    );
+    fn render(&mut self, ctx: &mut RenderContext);
 
     /// Вычисляет размер виджета в соответствии с constraints, используя контекст.
     /// После вызова layout, виджет должен запомнить свой final_size.

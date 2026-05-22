@@ -4,7 +4,7 @@ use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder,
     RenderPass, RenderPipeline, BindGroup};
 use wgpu::util::DeviceExt;
 
-use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader};
+use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader, Rect};
 use crate::common::vertex::{Vertex, DrawCommand};
 use crate::common::primitives::Primitives;
 use crate::texture_manager::TextureManager;
@@ -242,42 +242,77 @@ impl UiRenderer {
             timestamp_writes: None,
             multiview_mask: None,
         });
+
         if !self.commands.is_empty() {
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             self.execute_commands(&mut render_pass);
         }
+
         self.commands.clear();
     }
 
+    /// Выполняет сгруппированные draw call'ы с учётом scissor-прямоугольников.
     fn execute_commands(&mut self, render_pass: &mut RenderPass) {
-        let mut groups: HashMap<u64, Vec<Vec<Vertex>>> = HashMap::new();
+        // Ключ группировки: (texture_id, Option<(x, y, w, h)>)
+        // где x,y,w,h – целочисленные пиксельные координаты (u32)
+        let mut groups: HashMap<(u64, Option<(u32, u32, u32, u32)>), Vec<Vec<Vertex>>> = HashMap::new();
+
         for cmd in self.commands.drain(..) {
-            groups.entry(cmd.texture_id).or_default().push(cmd.vertices);
+            let key_scissor = cmd.scissor_rect.map(|rect| {
+                let x = rect.x.max(0.0) as u32;
+                let y = rect.y.max(0.0) as u32;
+                let w = rect.w.max(0.0) as u32;
+                let h = rect.h.max(0.0) as u32;
+                (x, y, w, h)
+            });
+            groups.entry((cmd.texture_id, key_scissor))
+                  .or_default()
+                  .push(cmd.vertices);
         }
+
         let mut all_vertices: Vec<Vertex> = Vec::new();
-        let mut draw_calls = Vec::new();
-        for (tid, verts_list) in groups.iter() {
+        let mut draw_calls = Vec::new(); // (texture_id, scissor_key, start, count)
+
+        for ((tid, scissor_key), verts_list) in groups.iter() {
             let start = all_vertices.len() as u32;
             let count = verts_list.iter().map(|v| v.len()).sum::<usize>() as u32;
             for verts in verts_list {
                 all_vertices.extend(verts);
             }
-            draw_calls.push((*tid, start, count));
+            draw_calls.push((*tid, *scissor_key, start, count));
         }
+
         if all_vertices.is_empty() {
             return;
         }
+
         self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
         let texture_manager = self.ui_manager.texture_manager();
-        for (tid, start, count) in draw_calls {
+
+        for (tid, scissor_key, start, count) in draw_calls {
             let bind_group = if tid == 0 {
                 texture_manager.get_fallback_bind_group()
             } else {
-                texture_manager.get_bind_group(tid).unwrap_or_else(|| texture_manager.get_fallback_bind_group())
+                texture_manager.get_bind_group(tid)
+                    .unwrap_or_else(|| texture_manager.get_fallback_bind_group())
             };
             render_pass.set_bind_group(1, bind_group, &[]);
+
+            if let Some((x, y, w, h)) = scissor_key {
+                if w > 0 && h > 0 {
+                    render_pass.set_scissor_rect(x, y, w, h);
+                } else {
+                    // Нулевая область – ничего не рисуем
+                    continue;
+                }
+            } else {
+                // Нет scissor – рисуем всё на весь экран
+                render_pass.set_scissor_rect(0, 0, self.surface_width, self.surface_height);
+            }
+
             render_pass.draw(start..start + count, 0..1);
         }
     }

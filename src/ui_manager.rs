@@ -5,6 +5,7 @@ use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::types::{BitmapFont, Constraints, LayoutContext, Point, Size};
 use crate::common::primitives::Primitives;
 use crate::common::vertex::DrawCommand;
+use crate::common::render_context::RenderContext;
 use crate::texture_manager::TextureManager;
 use crate::font_system::FontSystem;
 use crate::drag_drop_manager::DragDropManager;
@@ -55,11 +56,17 @@ impl UiManager {
 
     pub fn render(&mut self, commands: &mut Vec<DrawCommand>) {
         if let Some(mut root) = self.root.take() {
-            root.render(commands, self.primitives.as_ref(), &self.texture_manager, self);
+            let mut ctx = RenderContext::new(
+                commands,
+                self.primitives.as_ref(),
+                &self.texture_manager,
+            );
+            root.render(&mut ctx);
             self.root = Some(root);
         }
     }
 
+    // ---------- Управление шрифтами и текстурами ----------
     pub fn add_font(&mut self, name: String, font: Box<dyn BitmapFont>) {
         self.font_system.add_font(name, font);
     }
@@ -84,7 +91,7 @@ impl UiManager {
         self.font_system.get_font(name)
     }
 
-    // ---------- Доступ к виджетам по ID через замыкания ----------
+    // ---------- Доступ к виджетам по ID ----------
     pub fn with_widget_mut<F>(&mut self, id: WidgetId, mut f: F) -> bool
     where
         F: FnMut(&mut dyn RenderBox) -> bool,
@@ -138,7 +145,7 @@ impl UiManager {
         false
     }
 
-    // ---------- Фокус ----------
+    // ---------- Фокус (без изменений) ----------
     fn set_focus_to_widget(&mut self, id: WidgetId) -> bool {
         if self.focused_widget_id == Some(id) {
             return false;
