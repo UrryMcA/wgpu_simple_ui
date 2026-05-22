@@ -151,7 +151,7 @@ impl RenderBox for ScrollableContainer {
         rect.contains(point)
     }
 
-    fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
+    fn handle_event(&mut self, event: &Event, _ui_manager: &mut UiManager) -> bool {
         if let Event::MouseWheel { delta_x, delta_y, point } = event {
             if self.hit_test(*point) {
                 self.scroll_by(*delta_x, *delta_y);

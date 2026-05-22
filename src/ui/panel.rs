@@ -66,15 +66,6 @@ struct PanelRenderObject {
 }
 
 impl PanelRenderObject {
-    // Вспомогательный метод для получения внутреннего прямоугольника (область для ребёнка)
-    fn inner_rect(&self) -> Rect {
-        Rect::new(
-            self.position.x + self.margin.left + self.padding.left,
-            self.position.y + self.margin.top + self.padding.top,
-            self.size.width - self.margin.left - self.margin.right - self.padding.left - self.padding.right,
-            self.size.height - self.margin.top - self.margin.bottom - self.padding.top - self.padding.bottom,
-        )
-    }
 }
 
 impl RenderBox for PanelRenderObject {

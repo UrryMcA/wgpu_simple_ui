@@ -4,11 +4,14 @@ use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder,
     RenderPass, RenderPipeline, BindGroup};
 use wgpu::util::DeviceExt;
 
-use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader, Rect};
+use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader};
 use crate::common::vertex::{Vertex, DrawCommand};
 use crate::common::primitives::Primitives;
 use crate::texture_manager::TextureManager;
 use crate::ui_manager::UiManager;
+
+// Алиас для сложного типа ключа группировки
+type DrawGroupKey = (u64, Option<(u32, u32, u32, u32)>);
 
 pub struct UiRenderer {
     device: Device,
@@ -254,9 +257,7 @@ impl UiRenderer {
 
     /// Выполняет сгруппированные draw call'ы с учётом scissor-прямоугольников.
     fn execute_commands(&mut self, render_pass: &mut RenderPass) {
-        // Ключ группировки: (texture_id, Option<(x, y, w, h)>)
-        // где x,y,w,h – целочисленные пиксельные координаты (u32)
-        let mut groups: HashMap<(u64, Option<(u32, u32, u32, u32)>), Vec<Vec<Vertex>>> = HashMap::new();
+        let mut groups: HashMap<DrawGroupKey, Vec<Vec<Vertex>>> = HashMap::new();
 
         for cmd in self.commands.drain(..) {
             let key_scissor = cmd.scissor_rect.map(|rect| {
@@ -305,11 +306,9 @@ impl UiRenderer {
                 if w > 0 && h > 0 {
                     render_pass.set_scissor_rect(x, y, w, h);
                 } else {
-                    // Нулевая область – ничего не рисуем
                     continue;
                 }
             } else {
-                // Нет scissor – рисуем всё на весь экран
                 render_pass.set_scissor_rect(0, 0, self.surface_width, self.surface_height);
             }
 
