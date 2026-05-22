@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::common::Vertex;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Rect {
     pub x: f32, pub y: f32, pub w: f32, pub h: f32,
@@ -263,4 +265,23 @@ pub trait LayoutContext {
 
     /// Коэффициент масштабирования (HiDPI).
     fn scale_factor(&self) -> f32;
+}
+
+/// Кэшированный глиф для быстрого рендеринга.
+/// Содержит вершины в локальных координатах (0..width, 0..height) и метаданные.
+#[derive(Clone)]
+pub struct CachedGlyph {
+    /// 6 вершин (два треугольника) в локальных координатах.
+    /// Внимание: позиции вершин не масштабированы и не смещены.
+    pub vertices: [Vertex; 6],
+    /// Ширина глифа в пикселях (локальный масштаб).
+    pub width: f32,
+    /// Высота глифа в пикселях.
+    pub height: f32,
+    /// Смещение по X при отрисовке.
+    pub xoffset: f32,
+    /// Смещение по Y.
+    pub yoffset: f32,
+    /// Шаг по X до следующего глифа.
+    pub xadvance: f32,
 }

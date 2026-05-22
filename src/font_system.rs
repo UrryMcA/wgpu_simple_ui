@@ -1,13 +1,14 @@
 // src/font_system.rs
 use std::collections::HashMap;
-use crate::common::types::{BitmapFont, Size, UColor, Rect, TexCoords};
+use std::cell::RefCell;
+use crate::common::types::{BitmapFont, Size, UColor, Rect, TexCoords, CachedGlyph};
 use crate::common::vertex::Vertex;
 use crate::common::primitives::Primitives;
 
-/// Централизованное хранилище шрифтов.
 pub struct FontSystem {
     fonts: HashMap<String, Box<dyn BitmapFont>>,
     default_font_name: Option<String>,
+    glyph_cache: RefCell<HashMap<(u64, char, u32), CachedGlyph>>,
 }
 
 impl FontSystem {
@@ -15,10 +16,10 @@ impl FontSystem {
         Self {
             fonts: HashMap::new(),
             default_font_name: None,
+            glyph_cache: RefCell::new(HashMap::new()),
         }
     }
 
-    /// Добавляет шрифт в систему.
     pub fn add_font(&mut self, name: String, font: Box<dyn BitmapFont>) {
         if self.default_font_name.is_none() {
             self.default_font_name = Some(name.clone());
@@ -26,7 +27,6 @@ impl FontSystem {
         self.fonts.insert(name, font);
     }
 
-    /// Устанавливает шрифт по умолчанию.
     pub fn set_default_font(&mut self, name: &str) -> bool {
         if self.fonts.contains_key(name) {
             self.default_font_name = Some(name.to_string());
@@ -36,17 +36,63 @@ impl FontSystem {
         }
     }
 
-    /// Получить шрифт по имени.
     pub fn get_font(&self, name: &str) -> Option<&dyn BitmapFont> {
         self.fonts.get(name).map(|b| b.as_ref())
     }
 
-    /// Получить шрифт по умолчанию.
     pub fn default_font(&self) -> Option<&dyn BitmapFont> {
         self.default_font_name.as_ref().and_then(|name| self.get_font(name))
     }
 
-    // ---------- Измерение текста ----------
+    // ---------- Кэширование глифов (возвращаем копию) ----------
+    pub fn get_cached_glyph(
+        &self,
+        font: &dyn BitmapFont,
+        ch: char,
+        font_size: f32,
+        primitives: &dyn Primitives,
+    ) -> Option<CachedGlyph> {
+        let texture_id = font.texture_id();
+        let size_key = font_size.round() as u32;
+        let key = (texture_id, ch, size_key);
+
+        // Пытаемся получить копию из кэша
+        {
+            let cache = self.glyph_cache.borrow();
+            if let Some(glyph) = cache.get(&key) {
+                return Some(glyph.clone());
+            }
+        }
+
+        // Если нет, создаём новый глиф
+        let glyph_info = font.get_glyph(ch)?;
+        let rect = Rect::new(0.0, 0.0, glyph_info.width, glyph_info.height);
+        let tex_coords = TexCoords::new(glyph_info.u0, glyph_info.v0, glyph_info.u1, glyph_info.v1);
+        let color = UColor([1.0, 1.0, 1.0, 1.0]);
+        let vertices = primitives.textured_rect_vertices(rect, tex_coords, color);
+        assert_eq!(vertices.len(), 6, "textured_rect_vertices must return exactly 6 vertices");
+        let mut cached_vertices = [vertices[0]; 6];
+        cached_vertices.copy_from_slice(&vertices);
+
+        let cached = CachedGlyph {
+            vertices: cached_vertices,
+            width: glyph_info.width,
+            height: glyph_info.height,
+            xoffset: glyph_info.xoffset,
+            yoffset: glyph_info.yoffset,
+            xadvance: glyph_info.xadvance,
+        };
+
+        // Вставляем в кэш и возвращаем копию
+        self.glyph_cache.borrow_mut().insert(key, cached.clone());
+        Some(cached)
+    }
+
+    pub fn clear_glyph_cache(&self) {
+        self.glyph_cache.borrow_mut().clear();
+    }
+
+    // ---------- Измерение текста (без изменений) ----------
     pub fn measure_text(&self, text: &str, font_size: f32, max_width: f32) -> Size {
         let font = match self.default_font() {
             Some(f) => f,
@@ -84,25 +130,7 @@ impl FontSystem {
         Size::new(max_line_width, height)
     }
 
-    // ---------- Генерация вершин текста ----------
-    /// Генерирует вершины для текста, используя шрифт по умолчанию.
-    pub fn generate_text_vertices(
-        &self,
-        text: &str,
-        x: f32,
-        y: f32,
-        scale: f32,
-        color: UColor,
-        primitives: &dyn Primitives,
-    ) -> Vec<Vertex> {
-        let font = match self.default_font() {
-            Some(f) => f,
-            None => return Vec::new(),
-        };
-        self.generate_text_vertices_with_font(font, text, x, y, scale, color, primitives)
-    }
-
-    /// Генерирует вершины для текста с указанным шрифтом.
+    // ---------- Генерация вершин текста (используем копии глифов) ----------
     #[allow(clippy::too_many_arguments)]
     pub fn generate_text_vertices_with_font(
         &self,
@@ -110,33 +138,32 @@ impl FontSystem {
         text: &str,
         x: f32,
         y: f32,
-        scale: f32,
+        font_size: f32,
         color: UColor,
         primitives: &dyn Primitives,
     ) -> Vec<Vertex> {
-        let mut vertices = Vec::new();
+        let scale = font_size / font.line_height();
+        let mut vertices = Vec::with_capacity(text.len() * 6);
         let mut pen_x = x;
 
         for ch in text.chars() {
-            if let Some(glyph) = font.get_glyph(ch) {
-                let w = glyph.width * scale;
-                let h = glyph.height * scale;
-                let rect = Rect::new(
-                    pen_x + glyph.xoffset * scale,
-                    y + glyph.yoffset * scale,
-                    w,
-                    h,
-                );
-                let tex = TexCoords {
-                    u0: glyph.u0,
-                    v0: glyph.v0,
-                    u1: glyph.u1,
-                    v1: glyph.v1,
-                };
-                let verts = primitives.textured_rect_vertices(rect, tex, color);
-                vertices.extend(verts);
-                pen_x += glyph.xadvance * scale;
+            if ch == '\n' {
+                // перенос строки (упрощённо)
+                pen_x = x;
+                continue;
             }
+            let cached = match self.get_cached_glyph(font, ch, font_size, primitives) {
+                Some(g) => g,
+                None => continue,
+            };
+            for orig_vert in cached.vertices.iter() {
+                let mut vert = *orig_vert;
+                vert.position[0] = pen_x + orig_vert.position[0] * scale + cached.xoffset * scale;
+                vert.position[1] = y + orig_vert.position[1] * scale + cached.yoffset * scale;
+                vert.color = color.0;
+                vertices.push(vert);
+            }
+            pen_x += cached.xadvance * scale;
         }
         vertices
     }

@@ -60,7 +60,7 @@ impl UiManager {
                 commands,
                 self.primitives.as_ref(),
                 &self.texture_manager,
-                &self.font_system,   // добавлено
+                &self.font_system,   // изменяемая ссылка
             );
             root.render(&mut ctx);
             self.root = Some(root);

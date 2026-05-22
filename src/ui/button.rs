@@ -56,6 +56,7 @@ impl Widget for Button {
             is_hovered: false,
             is_focused: false,
             is_pressed: false,
+            is_dragging: false,
             id: None,
             on_click: self.on_click.take(),
         })
@@ -76,18 +77,21 @@ struct ButtonRenderObject {
     is_hovered: bool,
     is_focused: bool,
     is_pressed: bool,
+    is_dragging: bool,
     id: Option<WidgetId>,
     on_click: Option<Box<dyn FnMut() + Send>>,
 }
 
 impl ButtonRenderObject {
     fn current_color(&self) -> UColor {
-        if self.is_pressed {
-            UColor([0.1, 0.2, 0.4, 1.0])
+        if self.is_dragging {
+            UColor([0.5, 0.5, 0.5, 1.0])          // серый при перетаскивании
+        } else if self.is_pressed {
+            UColor([0.1, 0.2, 0.4, 1.0])          // тёмно-синий при нажатии
         } else if self.is_hovered || self.is_focused {
-            UColor([0.3, 0.4, 0.6, 1.0])
+            UColor([0.3, 0.4, 0.6, 1.0])          // подсветка при наведении/фокусе
         } else {
-            self.color
+            self.color                            // обычный цвет
         }
     }
 }
@@ -114,16 +118,19 @@ impl RenderBox for ButtonRenderObject {
         ctx.add_command(0, bg);
 
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
-            let scale = 16.0 / font.line_height();
-            let x = self.position.x + self.padding.left;
-            let y = self.position.y + self.padding.top;
             let verts = ctx.font_system.generate_text_vertices_with_font(
-                font, &self.text, x, y, scale, UColor([1.0, 1.0, 1.0, 1.0]), ctx.primitives
+                font,
+                &self.text,
+                self.position.x + self.padding.left,
+                self.position.y + self.padding.top,
+                16.0,
+                UColor([1.0, 1.0, 1.0, 1.0]),
+                ctx.primitives,
             );
             ctx.add_command(font.texture_id(), verts);
         }
     }
-
+        
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
     fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut [] }
 
@@ -134,7 +141,9 @@ impl RenderBox for ButtonRenderObject {
     fn handle_event(&mut self, event: &Event, _ui: &mut UiManager) -> bool {
         match event {
             Event::Click(_) => {
-                if let Some(cb) = &mut self.on_click { cb(); }
+                if let Some(cb) = &mut self.on_click {
+                    cb();
+                }
                 true
             }
             Event::PointerDown(_) => {
@@ -145,8 +154,9 @@ impl RenderBox for ButtonRenderObject {
                 self.is_pressed = false;
                 true
             }
-            Event::PointerMove(_) => {
-                self.is_hovered = true;
+            Event::PointerMove(point) => {
+                let inside = self.hit_test(*point);
+                self.is_hovered = inside;
                 true
             }
             _ => false,
@@ -161,28 +171,52 @@ impl RenderBox for ButtonRenderObject {
         if key == Key::Enter || key == Key::Space {
             if let Some(cb) = &mut self.on_click { cb(); }
             true
-        } else { false }
+        } else {
+            false
+        }
     }
     fn handle_char_input(&mut self, ch: char) -> bool {
         if ch == ' ' {
             if let Some(cb) = &mut self.on_click { cb(); }
             true
-        } else { false }
+        } else {
+            false
+        }
     }
 
+    // Drag & Drop (источник)
     fn can_drag(&self) -> bool { true }
-    fn drag_data(&self) -> Option<DragData> { Some(DragData::Text(self.text.clone())) }
-    fn on_drag_start(&mut self, _point: Point) { self.is_hovered = false; }
-    fn on_drag_end(&mut self, _cancelled: bool) {}
+    fn drag_data(&self) -> Option<DragData> {
+        Some(DragData::Text(self.text.clone()))
+    }
+    fn on_drag_start(&mut self, _point: Point) {
+        self.is_dragging = true;
+        self.is_hovered = false;
+    }
+    fn on_drag_move(&mut self, _point: Point) {
+        // не требуется
+    }
+    fn on_drag_end(&mut self, _cancelled: bool) {
+        self.is_dragging = false;
+    }
 
-    fn can_drop(&self, data: &DragData) -> bool { matches!(data, DragData::Text(_)) }
+    // Drag & Drop (цель)
+    fn can_drop(&self, data: &DragData) -> bool {
+        matches!(data, DragData::Text(_))
+    }
     fn on_drag_enter(&mut self, data: &DragData, _point: Point) {
-        if let DragData::Text(s) = data { eprintln!("Button drag enter: {}", s); }
+        if let DragData::Text(s) = data {
+            eprintln!("Button drag enter: {}", s);
+        }
         self.is_hovered = true;
     }
-    fn on_drag_leave(&mut self) { self.is_hovered = false; }
+    fn on_drag_leave(&mut self) {
+        self.is_hovered = false;
+    }
     fn on_drop(&mut self, data: &DragData, _point: Point) {
-        if let DragData::Text(s) = data { eprintln!("Button drop: {}", s); }
+        if let DragData::Text(s) = data {
+            eprintln!("Button drop: {}", s);
+        }
     }
 
     fn widget_id(&self) -> Option<WidgetId> { self.id }

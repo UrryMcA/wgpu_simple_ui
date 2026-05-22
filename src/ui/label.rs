@@ -69,13 +69,12 @@ impl RenderBox for LabelRenderObject {
 
     fn render(&mut self, ctx: &mut RenderContext) {
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
-            let scale = self.font_size / font.line_height();
             let verts = ctx.font_system.generate_text_vertices_with_font(
                 font,
                 &self.text,
                 self.position.x,
                 self.position.y,
-                scale,
+                self.font_size,
                 self.color,
                 ctx.primitives,
             );
@@ -85,7 +84,6 @@ impl RenderBox for LabelRenderObject {
 
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
     fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut [] }
-
     fn hit_test(&self, _point: Point) -> bool { false }
     fn widget_id(&self) -> Option<u64> { None }
     fn margin(&self) -> EdgeInsets { self.margin }
