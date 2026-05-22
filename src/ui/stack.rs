@@ -1,9 +1,9 @@
 // src/widgets/stack.rs
 use super::widget::{Widget, MultiChildRenderObjectWidget};
 use crate::common::render_box::RenderBox;
+use crate::common::render_context::RenderContext;
 use crate::common::types::*;
-use crate::common::{DrawCommand, Primitives};
-use crate::texture_manager::TextureManager;
+use crate::common::event::Event;
 use crate::ui_manager::UiManager;
 
 pub struct Stack {
@@ -69,9 +69,33 @@ impl RenderBox for StackRenderObject {
     }
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
-    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
+
+    fn render(&mut self, ctx: &mut RenderContext) {
         for child in &mut self.children {
-            child.render(commands, primitives, textures, ui_manager);
+            child.render(ctx);
         }
+    }
+
+    fn children(&self) -> &[Box<dyn RenderBox>] { &self.children }
+    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut self.children }
+
+    fn hit_test(&self, point: Point) -> bool {
+        Rect::new(self.position.x, self.position.y, self.size.width, self.size.height).contains(point)
+    }
+
+    fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
+        for child in self.children_mut().iter_mut().rev() {
+            if let Some(point) = event.point() {
+                if child.hit_test(point) && child.handle_event(event, ui_manager) {
+                    return true;
+                }
+            } else {
+                // события без точки (например, клавиатурные) пробуем отдать детям, если они могут их обработать
+                if child.handle_event(event, ui_manager) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }

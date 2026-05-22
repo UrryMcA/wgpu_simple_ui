@@ -1,14 +1,13 @@
 // src/widgets/container.rs
 use super::widget::{Widget, MultiChildRenderObjectWidget};
 use crate::common::render_box::{RenderBox, WidgetId};
-use crate::common::{Primitives, types::*};
-use crate::common::vertex::DrawCommand;
+use crate::common::render_context::RenderContext;
+use crate::common::types::*;
 use crate::common::event::{Event, DragData};
 use crate::common::layout_strategy::*;
 use crate::layout::grid::GridLayout;
 use crate::layout::horizontal::HorizontalLayout;
 use crate::layout::vertical::VerticalLayout;
-use crate::texture_manager::TextureManager;
 use crate::ui_manager::UiManager;
 
 pub struct Container {
@@ -137,7 +136,7 @@ impl RenderBox for ContainerRenderObject {
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
 
-    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, textures: &TextureManager, ui_manager: &UiManager) {
+    fn render(&mut self, ctx: &mut RenderContext) {
         if let Some(color) = self.color {
             let rect = Rect::new(
                 self.position.x + self.margin.left,
@@ -145,12 +144,11 @@ impl RenderBox for ContainerRenderObject {
                 self.size.width - self.margin.left - self.margin.right,
                 self.size.height - self.margin.top - self.margin.bottom,
             );
-            let bg = primitives.rounded_rect_vertices(rect, self.corner_radius, color);
-            commands.push(DrawCommand { texture_id: 0, vertices: bg });
+            let bg = ctx.primitives.rounded_rect_vertices(rect, self.corner_radius, color);
+            ctx.add_command(0, bg);
         }
-        // Используем изменяемый итератор
         for child in &mut self.children {
-            child.render(commands, primitives, textures, ui_manager);
+            child.render(ctx);
         }
     }
 
@@ -163,8 +161,15 @@ impl RenderBox for ContainerRenderObject {
 
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
         for child in self.children_mut().iter_mut().rev() {
-           if child.hit_test(event.point().unwrap_or_default()) && child.handle_event(event, ui_manager) {
-                return true;
+            if let Some(point) = event.point() {
+                if child.hit_test(point) && child.handle_event(event, ui_manager) {
+                    return true;
+                }
+            } else {
+                // события без точки (клавиатурные) не направляем детям, только если сами обрабатываем
+                if child.handle_event(event, ui_manager) {
+                    return true;
+                }
             }
         }
         false

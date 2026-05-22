@@ -1,11 +1,10 @@
 // src/widgets/button.rs
 use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::{RenderBox, WidgetId};
-use crate::common::{Primitives, types::*};
-use crate::common::vertex::DrawCommand;
+use crate::common::render_context::RenderContext;
+use crate::common::types::*;
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
-use crate::texture_manager::TextureManager;
 use crate::ui_manager::UiManager;
 
 pub struct Button {
@@ -56,6 +55,7 @@ impl Widget for Button {
             size: Size::default(),
             is_hovered: false,
             is_focused: false,
+            is_pressed: false,
             id: None,
             on_click: self.on_click.take(),
         })
@@ -75,13 +75,14 @@ struct ButtonRenderObject {
     size: Size,
     is_hovered: bool,
     is_focused: bool,
+    is_pressed: bool,
     id: Option<WidgetId>,
     on_click: Option<Box<dyn FnMut() + Send>>,
 }
 
 impl ButtonRenderObject {
     fn current_color(&self) -> UColor {
-        if self.is_pressed() {
+        if self.is_pressed {
             UColor([0.1, 0.2, 0.4, 1.0])
         } else if self.is_hovered || self.is_focused {
             UColor([0.3, 0.4, 0.6, 1.0])
@@ -89,7 +90,6 @@ impl ButtonRenderObject {
             self.color
         }
     }
-    fn is_pressed(&self) -> bool { false }
 }
 
 impl RenderBox for ButtonRenderObject {
@@ -108,19 +108,19 @@ impl RenderBox for ButtonRenderObject {
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
 
-    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, _textures: &TextureManager, ui_manager: &UiManager) {
+    fn render(&mut self, ctx: &mut RenderContext) {
         let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-        let bg = primitives.rounded_rect_vertices(rect, self.radius, self.current_color());
-        commands.push(DrawCommand { texture_id: 0, vertices: bg });
+        let bg = ctx.primitives.rounded_rect_vertices(rect, self.radius, self.current_color());
+        ctx.add_command(0, bg);
 
-        if let Some(font) = ui_manager.get_font(&self.font_name) {
+        if let Some(font) = ctx.font_system.get_font(&self.font_name) {
             let scale = 16.0 / font.line_height();
             let x = self.position.x + self.padding.left;
             let y = self.position.y + self.padding.top;
-            let verts = ui_manager.font_system().generate_text_vertices_with_font(
-                font, &self.text, x, y, scale, UColor([1.0, 1.0, 1.0, 1.0]), primitives
+            let verts = ctx.font_system.generate_text_vertices_with_font(
+                font, &self.text, x, y, scale, UColor([1.0, 1.0, 1.0, 1.0]), ctx.primitives
             );
-            commands.push(DrawCommand { texture_id: font.texture_id(), vertices: verts });
+            ctx.add_command(font.texture_id(), verts);
         }
     }
 
@@ -133,10 +133,22 @@ impl RenderBox for ButtonRenderObject {
 
     fn handle_event(&mut self, event: &Event, _ui: &mut UiManager) -> bool {
         match event {
-            Event::Click(_) => { if let Some(cb) = &mut self.on_click { cb(); } true }
-            Event::PointerMove(_) => { self.is_hovered = true; true }
-            Event::PointerDown(_) => true,
-            Event::PointerUp(_) => true,
+            Event::Click(_) => {
+                if let Some(cb) = &mut self.on_click { cb(); }
+                true
+            }
+            Event::PointerDown(_) => {
+                self.is_pressed = true;
+                true
+            }
+            Event::PointerUp(_) => {
+                self.is_pressed = false;
+                true
+            }
+            Event::PointerMove(_) => {
+                self.is_hovered = true;
+                true
+            }
             _ => false,
         }
     }

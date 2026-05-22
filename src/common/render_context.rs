@@ -1,7 +1,9 @@
+// src/common/render_context.rs
 use crate::common::primitives::Primitives;
 use crate::common::types::Rect;
 use crate::common::vertex::{DrawCommand, Vertex};
 use crate::texture_manager::TextureManager;
+use crate::font_system::FontSystem;
 
 /// Контекст рендеринга, передаваемый в `RenderBox::render`.
 /// Содержит все необходимые данные для добавления команд отрисовки
@@ -10,6 +12,7 @@ pub struct RenderContext<'a> {
     pub commands: &'a mut Vec<DrawCommand>,
     pub primitives: &'a dyn Primitives,
     pub textures: &'a TextureManager,
+    pub font_system: &'a FontSystem,
     scissor_stack: Vec<Rect>,
 }
 
@@ -18,11 +21,13 @@ impl<'a> RenderContext<'a> {
         commands: &'a mut Vec<DrawCommand>,
         primitives: &'a dyn Primitives,
         textures: &'a TextureManager,
+        font_system: &'a FontSystem,
     ) -> Self {
         Self {
             commands,
             primitives,
             textures,
+            font_system,
             scissor_stack: Vec::new(),
         }
     }

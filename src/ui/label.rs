@@ -1,10 +1,8 @@
 // src/widgets/label.rs
 use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::RenderBox;
+use crate::common::render_context::RenderContext;
 use crate::common::types::*;
-use crate::common::{DrawCommand, Primitives};
-use crate::texture_manager::TextureManager;
-use crate::ui_manager::UiManager;
 
 pub struct Label {
     text: String,
@@ -64,22 +62,30 @@ impl RenderBox for LabelRenderObject {
         self.size = constrained;
         constrained
     }
+
     fn set_position(&mut self, pos: Point) { self.position = pos; }
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
 
-    fn render(&mut self, commands: &mut Vec<DrawCommand>, primitives: &dyn Primitives, _textures: &TextureManager, ui_manager: &UiManager) {
-        if let Some(font) = ui_manager.get_font(&self.font_name) {
+    fn render(&mut self, ctx: &mut RenderContext) {
+        if let Some(font) = ctx.font_system.get_font(&self.font_name) {
             let scale = self.font_size / font.line_height();
-            let verts = ui_manager.font_system().generate_text_vertices_with_font(
-                font, &self.text, self.position.x, self.position.y, scale, self.color, primitives
+            let verts = ctx.font_system.generate_text_vertices_with_font(
+                font,
+                &self.text,
+                self.position.x,
+                self.position.y,
+                scale,
+                self.color,
+                ctx.primitives,
             );
-            commands.push(DrawCommand { texture_id: font.texture_id(), vertices: verts });
+            ctx.add_command(font.texture_id(), verts);
         }
     }
 
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
     fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut [] }
+
     fn hit_test(&self, _point: Point) -> bool { false }
     fn widget_id(&self) -> Option<u64> { None }
     fn margin(&self) -> EdgeInsets { self.margin }
