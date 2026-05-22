@@ -28,7 +28,9 @@ impl Label {
 }
 
 impl Widget for Label {
-    fn min_size(&self) -> Size { Size::new(self.text.len() as f32 * self.font_size * 0.6, self.font_size) }
+    fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size {
+        ctx.measure_text_with_font(&self.font_name, &self.text, self.font_size, f32::INFINITY)
+    }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(LabelRenderObject {

@@ -2,7 +2,7 @@
 use crate::common::{render_box::RenderBox, types::*};
 
 pub trait Widget {
-    fn min_size(&self) -> Size;
+    fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size;
     fn margin(&self) -> EdgeInsets { EdgeInsets::default() }
     fn padding(&self) -> EdgeInsets { EdgeInsets::default() }
     fn create_render_object(&mut self) -> Box<dyn RenderBox>;

@@ -22,7 +22,9 @@ impl Image {
 }
 
 impl Widget for Image {
-    fn min_size(&self) -> Size { self.size }
+     fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { 
+        self.size 
+    }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(ImageRenderObject {

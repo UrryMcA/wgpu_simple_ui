@@ -51,7 +51,9 @@ impl Container {
 }
 
 impl Widget for Container {
-    fn min_size(&self) -> Size { Size::zero() }
+    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { 
+        Size::zero() 
+    }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn padding(&self) -> EdgeInsets { self.padding }
 

@@ -27,7 +27,9 @@ impl Positioned {
 }
 
 impl Widget for Positioned {
-    fn min_size(&self) -> Size { self.child.min_size() }
+    fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size { 
+        self.child.min_size(ctx) 
+    }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(PositionedRenderObject {
             child: self.child.create_render_object(),

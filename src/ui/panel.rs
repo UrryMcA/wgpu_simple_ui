@@ -32,8 +32,8 @@ impl Panel {
 }
 
 impl Widget for Panel {
-    fn min_size(&self) -> Size {
-        let child_min = self.child.min_size();
+    fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size {
+        let child_min = self.child.min_size(ctx);
         let padded = self.padding.inflate(child_min);
         self.margin.inflate(padded)
     }

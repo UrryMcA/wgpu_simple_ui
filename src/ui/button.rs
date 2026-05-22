@@ -40,7 +40,9 @@ impl Button {
 }
 
 impl Widget for Button {
-    fn min_size(&self) -> Size { Size::new(80.0, 30.0) }
+    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { 
+        Size::new(80.0, 30.0) 
+    }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn padding(&self) -> EdgeInsets { self.padding }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {

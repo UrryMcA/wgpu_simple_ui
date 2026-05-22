@@ -26,17 +26,16 @@ impl Stack {
 }
 
 impl Widget for Stack {
-    fn min_size(&self) -> Size {
+    fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size {
         let mut max_w: f32 = 0.0;
         let mut max_h: f32 = 0.0;
         for child in &self.children {
-            let s = child.min_size();
+            let s = child.min_size(ctx);
             max_w = max_w.max(s.width);
             max_h = max_h.max(s.height);
         }
         Size::new(max_w, max_h)
     }
-
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let mut render_objects = Vec::new();
         for child in &mut self.children {
