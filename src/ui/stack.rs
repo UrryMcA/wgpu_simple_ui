@@ -8,10 +8,21 @@ use crate::ui_manager::UiManager;
 
 pub struct Stack {
     children: Vec<Box<dyn Widget>>,
+    alignment: Alignment,
 }
 
 impl Stack {
-    pub fn new(children: Vec<Box<dyn Widget>>) -> Self { Self { children } }
+    pub fn new(children: Vec<Box<dyn Widget>>) -> Self {
+        Self {
+            children,
+            alignment: Alignment::Start,
+        }
+    }
+
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
+        self
+    }
 }
 
 impl Widget for Stack {
@@ -25,6 +36,7 @@ impl Widget for Stack {
         }
         Size::new(max_w, max_h)
     }
+
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let mut render_objects = Vec::new();
         for child in &mut self.children {
@@ -32,6 +44,7 @@ impl Widget for Stack {
         }
         Box::new(StackRenderObject {
             children: render_objects,
+            alignment: self.alignment,
             position: Point::default(),
             size: Size::default(),
         })
@@ -39,11 +52,14 @@ impl Widget for Stack {
 }
 
 impl MultiChildRenderObjectWidget for Stack {
-    fn children(&self) -> &[Box<dyn Widget>] { &self.children }
+    fn children(&self) -> &[Box<dyn Widget>] {
+        &self.children
+    }
 }
 
 struct StackRenderObject {
     children: Vec<Box<dyn RenderBox>>,
+    alignment: Alignment,
     position: Point,
     size: Size,
 }
@@ -61,14 +77,34 @@ impl RenderBox for StackRenderObject {
         self.size = final_size;
         final_size
     }
+
     fn set_position(&mut self, position: Point) {
         self.position = position;
+
         for child in &mut self.children {
-            child.set_position(position);
+            let child_offset_x = match self.alignment {
+                Alignment::Start => 0.0,
+                Alignment::Center => (self.size.width - child.size().width) / 2.0,
+                Alignment::End => self.size.width - child.size().width,
+                Alignment::Stretch => 0.0,
+            };
+            let child_offset_y = match self.alignment {
+                Alignment::Start => 0.0,
+                Alignment::Center => (self.size.height - child.size().height) / 2.0,
+                Alignment::End => self.size.height - child.size().height,
+                Alignment::Stretch => 0.0,
+            };
+            child.set_position(Point::new(position.x + child_offset_x, position.y + child_offset_y));
         }
     }
-    fn position(&self) -> Point { self.position }
-    fn size(&self) -> Size { self.size }
+
+    fn position(&self) -> Point {
+        self.position
+    }
+
+    fn size(&self) -> Size {
+        self.size
+    }
 
     fn render(&mut self, ctx: &mut RenderContext) {
         for child in &mut self.children {
@@ -76,8 +112,13 @@ impl RenderBox for StackRenderObject {
         }
     }
 
-    fn children(&self) -> &[Box<dyn RenderBox>] { &self.children }
-    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut self.children }
+    fn children(&self) -> &[Box<dyn RenderBox>] {
+        &self.children
+    }
+
+    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] {
+        &mut self.children
+    }
 
     fn hit_test(&self, point: Point) -> bool {
         Rect::new(self.position.x, self.position.y, self.size.width, self.size.height).contains(point)
@@ -90,7 +131,6 @@ impl RenderBox for StackRenderObject {
                     return true;
                 }
             } else {
-                // события без точки (например, клавиатурные) пробуем отдать детям, если они могут их обработать
                 if child.handle_event(event, ui_manager) {
                     return true;
                 }

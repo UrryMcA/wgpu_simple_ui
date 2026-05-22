@@ -126,7 +126,15 @@ impl RenderBox for ContainerRenderObject {
         let inner_rect = self.inner_rect();
         let mut children_refs2: Vec<&mut dyn RenderBox> = self.children.iter_mut().map(|c| c.as_mut()).collect();
         let child_rects = self.strategy.arrange(&mut children_refs2, inner_rect);
+
+        // Применяем позиции и при необходимости перевычисляем layout для растянутых детей
+        const EPS: f32 = 0.1;
         for (child, rect) in self.children.iter_mut().zip(child_rects) {
+            let needs_relayout = (rect.w - child.size().width).abs() > EPS || (rect.h - child.size().height).abs() > EPS;
+            if needs_relayout {
+                // Пересчитываем layout ребёнка с точными ограничениями (tight)
+                child.layout(Constraints::tight(rect.w, rect.h), ctx);
+            }
             child.set_position(Point::new(rect.x, rect.y));
         }
         self.size
@@ -166,7 +174,6 @@ impl RenderBox for ContainerRenderObject {
                     return true;
                 }
             } else {
-                // события без точки (клавиатурные) не направляем детям, только если сами обрабатываем
                 if child.handle_event(event, ui_manager) {
                     return true;
                 }
