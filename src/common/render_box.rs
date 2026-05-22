@@ -1,5 +1,4 @@
 use crate::common::Primitives;
-// src/common/render_box.rs
 use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
 use crate::common::types::{Constraints, EdgeInsets, LayoutContext, Point, Rect, Size};
@@ -13,13 +12,13 @@ pub type WidgetId = u64;
 
 /// Основной трейт для всех объектов рендеринга.
 pub trait RenderBox: Any {
-    // ---------- Обязательные методы из оригинального проекта ----------
+    // ---------- Обязательные методы ----------
     fn render(
         &mut self,
         commands: &mut Vec<DrawCommand>,
         primitives: &dyn Primitives,
         textures: &TextureManager,
-        ui_manager: &UiManager,
+        ui_manager: &mut UiManager,   // изменено: &mut вместо &
     );
 
     /// Вычисляет размер виджета в соответствии с constraints, используя контекст.
@@ -56,12 +55,17 @@ pub trait RenderBox: Any {
 
     // ---------- Обработка событий (базовая маршрутизация) ----------
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
-        // Сначала пробуем отдать детям (сверху вниз по Z-порядку)
-        for child in self.children_mut().iter_mut().rev() {
-            if child.hit_test(event.point().unwrap_or_default())
-                && child.handle_event(event, ui_manager) {
-                     return true;
+        // Если у события нет точки, пробуем отдать детям без проверки попадания?
+        // Лучше проверять только если точка есть.
+        if let Some(point) = event.point() {
+            for child in self.children_mut().iter_mut().rev() {
+                if child.hit_test(point) && child.handle_event(event, ui_manager) {
+                    return true;
                 }
+            }
+        } else {
+            // События без точки (например, клавиатурные) отправляем всем детям? Обычно нет.
+            // Для безопасности просто игнорируем или отправляем первому? Оставим false.
         }
         false
     }
@@ -128,6 +132,4 @@ pub trait RenderBox: Any {
     fn margin(&self) -> EdgeInsets {
         EdgeInsets::default()
     }
-
-
 }

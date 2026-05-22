@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use crate::common::types::Rect;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -12,6 +13,9 @@ pub struct Vertex {
 pub struct DrawCommand {
     pub texture_id: u64,
     pub vertices: Vec<Vertex>,
+    /// Область отсечения (в пиксельных координатах, относительно окна).
+    /// `None` означает отсутствие отсечения (будет установлен scissor на весь экран).
+    pub scissor_rect: Option<Rect>,
 }
 
 impl Vertex {

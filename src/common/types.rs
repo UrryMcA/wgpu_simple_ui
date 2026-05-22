@@ -9,6 +9,23 @@ impl Rect {
     pub fn contains(&self, point: Point) -> bool {
         point.x >= self.x && point.x <= self.x + self.w && point.y >= self.y && point.y <= self.y + self.h
     }
+    // Возвращает пересечение двух прямоугольников.
+    // Если пересечения нет, возвращает `None`.
+    pub fn intersect(&self, other: &Rect) -> Option<Rect> {
+        let x1 = self.x.max(other.x);
+        let y1 = self.y.max(other.y);
+        let x2 = (self.x + self.w).min(other.x + other.w);
+        let y2 = (self.y + self.h).min(other.y + other.h);
+        if x2 > x1 && y2 > y1 {
+            Some(Rect::new(x1, y1, x2 - x1, y2 - y1))
+        } else {
+            None
+        }
+    }
+    // Проверяет, имеет ли прямоугольник нулевую площадь.
+    pub fn is_empty(&self) -> bool {
+        self.w <= 0.0 || self.h <= 0.0
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
