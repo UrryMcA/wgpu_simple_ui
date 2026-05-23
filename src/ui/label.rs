@@ -71,7 +71,7 @@ impl RenderBox for LabelRenderObject {
 
     fn render(&mut self, ctx: &mut RenderContext) {
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
-            let verts = ctx.font_system.generate_text_vertices_with_font(
+            let (verts, inds) = ctx.font_system.generate_text_vertices_with_font(
                 font,
                 &self.text,
                 self.position.x,
@@ -80,7 +80,7 @@ impl RenderBox for LabelRenderObject {
                 self.color,
                 ctx.primitives,
             );
-            ctx.add_command(font.texture_id(), verts);
+            ctx.add_command(font.texture_id(), verts, inds);
         }
     }
 

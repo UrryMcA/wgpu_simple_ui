@@ -181,4 +181,91 @@ impl Primitives for DefaultPrimitives {
         }
         vertices
     }
+
+// ----- НОВЫЕ МЕТОДЫ -----
+    fn rect_vertices_indices(&self, rect: Rect, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        let x = rect.x; let y = rect.y;
+        let x2 = x + rect.w; let y2 = y + rect.h;
+        let c = color.0;
+        let vertices = vec![
+            Vertex { position: [x, y], tex_coord: [0.0, 0.0], color: c },
+            Vertex { position: [x2, y], tex_coord: [1.0, 0.0], color: c },
+            Vertex { position: [x2, y2], tex_coord: [1.0, 1.0], color: c },
+            Vertex { position: [x, y2], tex_coord: [0.0, 1.0], color: c },
+        ];
+        let indices = vec![0, 1, 2, 0, 2, 3];
+        (vertices, indices)
+    }
+
+    fn textured_rect_vertices_indices(&self, rect: Rect, tex_coords: TexCoords, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        let x = rect.x; let y = rect.y;
+        let x2 = x + rect.w; let y2 = y + rect.h;
+        let c = color.0;
+        let (u0, v0, u1, v1) = (tex_coords.u0, tex_coords.v0, tex_coords.u1, tex_coords.v1);
+        let vertices = vec![
+            Vertex { position: [x, y], tex_coord: [u0, v0], color: c },
+            Vertex { position: [x2, y], tex_coord: [u1, v0], color: c },
+            Vertex { position: [x2, y2], tex_coord: [u1, v1], color: c },
+            Vertex { position: [x, y2], tex_coord: [u0, v1], color: c },
+        ];
+        let indices = vec![0, 1, 2, 0, 2, 3];
+        (vertices, indices)
+    }
+
+    fn line_vertices_indices(&self, line: Line, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        let x1 = line.x1; let y1 = line.y1;
+        let x2 = line.x2; let y2 = line.y2;
+        let thickness = line.thickness;
+        let c = color.0;
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let len = dx.hypot(dy);
+        if len < 1e-6 { return (Vec::new(), Vec::new()); }
+        let angle = dy.atan2(dx);
+        let cos = angle.cos();
+        let sin = angle.sin();
+        let half = thickness * 0.5;
+        let cx = (x1 + x2) * 0.5;
+        let cy = (y1 + y2) * 0.5;
+        let local = [
+            (-len * 0.5, -half),
+            ( len * 0.5, -half),
+            ( len * 0.5,  half),
+            (-len * 0.5,  half),
+        ];
+        let vertices: Vec<Vertex> = local.iter().map(|(lx, ly)| {
+            let x = cx + lx * cos - ly * sin;
+            let y = cy + lx * sin + ly * cos;
+            Vertex { position: [x, y], tex_coord: [0.0, 0.0], color: c }
+        }).collect();
+        let indices = vec![0, 1, 2, 0, 2, 3];
+        (vertices, indices)
+    }
+
+    fn arc_vertices_indices(&self, arc: Arc, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        // Для дуги используем старый метод, который возвращает вершины (уже треугольники),
+        // и генерируем последовательные индексы.
+        let vertices = self.arc_vertices(arc, color);
+        let indices = (0..vertices.len() as u32).collect();
+        (vertices, indices)
+    }
+
+    fn filled_arc_sector_vertices_indices(&self, sector: FilledArcSector, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        let vertices = self.filled_arc_sector_vertices(sector, color);
+        let indices = (0..vertices.len() as u32).collect();
+        (vertices, indices)
+    }
+
+    fn rounded_rect_vertices_indices(&self, rect: Rect, radius: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        let vertices = self.rounded_rect_vertices(rect, radius, color);
+        let indices = (0..vertices.len() as u32).collect();
+        (vertices, indices)
+    }
+
+    fn rounded_rect_outline_vertices_indices(&self, rect: Rect, radius: f32, thickness: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+        let vertices = self.rounded_rect_outline_vertices(rect, radius, thickness, color);
+        let indices = (0..vertices.len() as u32).collect();
+        (vertices, indices)
+    }
+    
 }

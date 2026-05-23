@@ -23,4 +23,14 @@ pub trait Primitives {
 
     // Контур скруглённого прямоугольника
     fn rounded_rect_outline_vertices(&self,rect: Rect,  radius: f32, thickness: f32, color: UColor) -> Vec<Vertex>;
+
+        // ----- новые методы с индексами -----
+    fn rect_vertices_indices(&self, rect: Rect, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    fn textured_rect_vertices_indices(&self, rect: Rect, tex_coords: TexCoords, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    fn line_vertices_indices(&self, line: Line, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    fn arc_vertices_indices(&self, arc: Arc, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    fn filled_arc_sector_vertices_indices(&self, sector: FilledArcSector, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    fn rounded_rect_vertices_indices(&self, rect: Rect, radius: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    fn rounded_rect_outline_vertices_indices(&self, rect: Rect, radius: f32, thickness: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>);
+    
 }

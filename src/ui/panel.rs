@@ -106,17 +106,14 @@ impl RenderBox for PanelRenderObject {
     fn size(&self) -> Size { self.size }
 
     fn render(&mut self, ctx: &mut RenderContext) {
-        // Рисуем фон панели
         let rect = Rect::new(
             self.position.x + self.margin.left,
             self.position.y + self.margin.top,
             self.size.width - self.margin.left - self.margin.right,
             self.size.height - self.margin.top - self.margin.bottom,
         );
-        let bg = ctx.primitives.rounded_rect_vertices(rect, self.corner_radius, self.background_color);
-        ctx.add_command(0, bg);
-        
-        // Рендерим ребёнка
+        let (verts, inds) = ctx.primitives.rounded_rect_vertices_indices(rect, self.corner_radius, self.background_color);
+        ctx.add_command(0, verts, inds);
         self.child.render(ctx);
     }
 

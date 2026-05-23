@@ -22,9 +22,7 @@ impl Image {
 }
 
 impl Widget for Image {
-     fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { 
-        self.size 
-    }
+    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { self.size }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(ImageRenderObject {
@@ -60,16 +58,14 @@ impl RenderBox for ImageRenderObject {
         let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
         let tex_coords = TexCoords::new(0.0, 0.0, 1.0, 1.0);
         let color = UColor([1.0, 1.0, 1.0, 1.0]);
-        let verts = ctx.primitives.textured_rect_vertices(rect, tex_coords, color);
-        ctx.add_command(self.texture_id, verts);
+        let (verts, inds) = ctx.primitives.textured_rect_vertices_indices(rect, tex_coords, color);
+        ctx.add_command(self.texture_id, verts, inds);
     }
 
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
     fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut [] }
-
     fn hit_test(&self, point: Point) -> bool {
         Rect::new(self.position.x, self.position.y, self.size.width, self.size.height).contains(point)
     }
-
     fn margin(&self) -> EdgeInsets { self.margin }
 }

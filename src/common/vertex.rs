@@ -12,10 +12,9 @@ pub struct Vertex {
 #[derive(Clone)]
 pub struct DrawCommand {
     pub texture_id: u64,
-    pub vertices: Vec<Vertex>,
-    /// Область отсечения (в пиксельных координатах, относительно окна).
-    /// `None` означает отсутствие отсечения (будет установлен scissor на весь экран).
     pub scissor_rect: Option<Rect>,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,       // добавлено
 }
 
 impl Vertex {

@@ -40,9 +40,7 @@ impl Button {
 }
 
 impl Widget for Button {
-    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { 
-        Size::new(80.0, 30.0) 
-    }
+    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { Size::new(80.0, 30.0) }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn padding(&self) -> EdgeInsets { self.padding }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
@@ -87,13 +85,13 @@ struct ButtonRenderObject {
 impl ButtonRenderObject {
     fn current_color(&self) -> UColor {
         if self.is_dragging {
-            UColor([0.5, 0.5, 0.5, 1.0])          // серый при перетаскивании
+            UColor([0.5, 0.5, 0.5, 1.0])
         } else if self.is_pressed {
-            UColor([0.1, 0.2, 0.4, 1.0])          // тёмно-синий при нажатии
+            UColor([0.1, 0.2, 0.4, 1.0])
         } else if self.is_hovered || self.is_focused {
-            UColor([0.3, 0.4, 0.6, 1.0])          // подсветка при наведении/фокусе
+            UColor([0.3, 0.4, 0.6, 1.0])
         } else {
-            self.color                            // обычный цвет
+            self.color
         }
     }
 }
@@ -115,12 +113,14 @@ impl RenderBox for ButtonRenderObject {
     fn size(&self) -> Size { self.size }
 
     fn render(&mut self, ctx: &mut RenderContext) {
+        // Фон кнопки
         let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-        let bg = ctx.primitives.rounded_rect_vertices(rect, self.radius, self.current_color());
-        ctx.add_command(0, bg);
+        let (verts, inds) = ctx.primitives.rounded_rect_vertices_indices(rect, self.radius, self.current_color());
+        ctx.add_command(0, verts, inds);
 
+        // Текст
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
-            let verts = ctx.font_system.generate_text_vertices_with_font(
+            let (verts, inds) = ctx.font_system.generate_text_vertices_with_font(
                 font,
                 &self.text,
                 self.position.x + self.padding.left,
@@ -129,10 +129,10 @@ impl RenderBox for ButtonRenderObject {
                 UColor([1.0, 1.0, 1.0, 1.0]),
                 ctx.primitives,
             );
-            ctx.add_command(font.texture_id(), verts);
+            ctx.add_command(font.texture_id(), verts, inds);
         }
     }
-        
+
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
     fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut [] }
 
@@ -143,9 +143,7 @@ impl RenderBox for ButtonRenderObject {
     fn handle_event(&mut self, event: &Event, _ui: &mut UiManager) -> bool {
         match event {
             Event::Click(_) => {
-                if let Some(cb) = &mut self.on_click {
-                    cb();
-                }
+                if let Some(cb) = &mut self.on_click { cb(); }
                 true
             }
             Event::PointerDown(_) => {
@@ -186,7 +184,6 @@ impl RenderBox for ButtonRenderObject {
         }
     }
 
-    // Drag & Drop (источник)
     fn can_drag(&self) -> bool { true }
     fn drag_data(&self) -> Option<DragData> {
         Some(DragData::Text(self.text.clone()))
@@ -195,14 +192,10 @@ impl RenderBox for ButtonRenderObject {
         self.is_dragging = true;
         self.is_hovered = false;
     }
-    fn on_drag_move(&mut self, _point: Point) {
-        // не требуется
-    }
     fn on_drag_end(&mut self, _cancelled: bool) {
         self.is_dragging = false;
     }
 
-    // Drag & Drop (цель)
     fn can_drop(&self, data: &DragData) -> bool {
         matches!(data, DragData::Text(_))
     }

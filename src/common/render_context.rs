@@ -1,13 +1,9 @@
-// src/common/render_context.rs
 use crate::common::primitives::Primitives;
 use crate::common::types::Rect;
 use crate::common::vertex::{DrawCommand, Vertex};
 use crate::texture_manager::TextureManager;
 use crate::font_system::FontSystem;
 
-/// Контекст рендеринга, передаваемый в `RenderBox::render`.
-/// Содержит все необходимые данные для добавления команд отрисовки
-/// и управления стеком scissor-областей.
 pub struct RenderContext<'a> {
     pub commands: &'a mut Vec<DrawCommand>,
     pub primitives: &'a dyn Primitives,
@@ -33,12 +29,13 @@ impl<'a> RenderContext<'a> {
     }
 
     /// Добавляет команду отрисовки с текущим активным scissor-прямоугольником.
-    pub fn add_command(&mut self, texture_id: u64, vertices: Vec<Vertex>) {
+    pub fn add_command(&mut self, texture_id: u64, vertices: Vec<Vertex>, indices: Vec<u32>) {
         let scissor = self.current_scissor();
         self.commands.push(DrawCommand {
             texture_id,
-            vertices,
             scissor_rect: scissor,
+            vertices,
+            indices,
         });
     }
 

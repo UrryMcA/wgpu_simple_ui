@@ -1,4 +1,3 @@
-// src/font_system.rs
 use std::collections::HashMap;
 use std::cell::RefCell;
 use crate::common::types::{BitmapFont, Size, UColor, Rect, TexCoords, CachedGlyph};
@@ -44,7 +43,7 @@ impl FontSystem {
         self.default_font_name.as_ref().and_then(|name| self.get_font(name))
     }
 
-    // ---------- Кэширование глифов (возвращаем копию) ----------
+    // ---------- Кэширование глифов ----------
     pub fn get_cached_glyph(
         &self,
         font: &dyn BitmapFont,
@@ -56,7 +55,6 @@ impl FontSystem {
         let size_key = font_size.round() as u32;
         let key = (texture_id, ch, size_key);
 
-        // Пытаемся получить копию из кэша
         {
             let cache = self.glyph_cache.borrow();
             if let Some(glyph) = cache.get(&key) {
@@ -64,15 +62,14 @@ impl FontSystem {
             }
         }
 
-        // Если нет, создаём новый глиф
         let glyph_info = font.get_glyph(ch)?;
         let rect = Rect::new(0.0, 0.0, glyph_info.width, glyph_info.height);
         let tex_coords = TexCoords::new(glyph_info.u0, glyph_info.v0, glyph_info.u1, glyph_info.v1);
         let color = UColor([1.0, 1.0, 1.0, 1.0]);
-        let vertices = primitives.textured_rect_vertices(rect, tex_coords, color);
-        assert_eq!(vertices.len(), 6, "textured_rect_vertices must return exactly 6 vertices");
-        let mut cached_vertices = [vertices[0]; 6];
-        cached_vertices.copy_from_slice(&vertices);
+        let (verts, _) = primitives.textured_rect_vertices_indices(rect, tex_coords, color);
+        assert_eq!(verts.len(), 4, "textured_rect_vertices_indices must return exactly 4 vertices");
+        let mut cached_vertices = [verts[0]; 4];
+        cached_vertices.copy_from_slice(&verts);
 
         let cached = CachedGlyph {
             vertices: cached_vertices,
@@ -83,7 +80,6 @@ impl FontSystem {
             xadvance: glyph_info.xadvance,
         };
 
-        // Вставляем в кэш и возвращаем копию
         self.glyph_cache.borrow_mut().insert(key, cached.clone());
         Some(cached)
     }
@@ -92,7 +88,7 @@ impl FontSystem {
         self.glyph_cache.borrow_mut().clear();
     }
 
-    // ---------- Измерение текста (без изменений) ----------
+    // ---------- Измерение текста ----------
     pub fn measure_text(&self, text: &str, font_size: f32, max_width: f32) -> Size {
         let font = match self.default_font() {
             Some(f) => f,
@@ -106,7 +102,6 @@ impl FontSystem {
         let mut max_line_width: f32 = 0.0;
         let mut line_width: f32 = 0.0;
         let mut lines = 1;
-
         for ch in text.chars() {
             if ch == '\n' {
                 max_line_width = max_line_width.max(line_width);
@@ -130,7 +125,7 @@ impl FontSystem {
         Size::new(max_line_width, height)
     }
 
-    // ---------- Генерация вершин текста (используем копии глифов) ----------
+    // ---------- Генерация вершин и индексов текста ----------
     #[allow(clippy::too_many_arguments)]
     pub fn generate_text_vertices_with_font(
         &self,
@@ -141,31 +136,37 @@ impl FontSystem {
         font_size: f32,
         color: UColor,
         primitives: &dyn Primitives,
-    ) -> Vec<Vertex> {
+    ) -> (Vec<Vertex>, Vec<u32>) {
         let scale = font_size / font.line_height();
-        let mut vertices = Vec::with_capacity(text.len() * 6);
+        let mut all_verts = Vec::new();
+        let mut all_indices = Vec::new();
         let mut pen_x = x;
 
         for ch in text.chars() {
             if ch == '\n' {
-                // перенос строки (упрощённо)
-                pen_x = x;
+                pen_x = x; // упрощённо
                 continue;
             }
             let cached = match self.get_cached_glyph(font, ch, font_size, primitives) {
                 Some(g) => g,
                 None => continue,
             };
+            let base_idx = all_verts.len() as u32;
             for orig_vert in cached.vertices.iter() {
                 let mut vert = *orig_vert;
                 vert.position[0] = pen_x + orig_vert.position[0] * scale + cached.xoffset * scale;
                 vert.position[1] = y + orig_vert.position[1] * scale + cached.yoffset * scale;
                 vert.color = color.0;
-                vertices.push(vert);
+                all_verts.push(vert);
             }
+            // Индексы для прямоугольника (6 штук) на 4 вершины
+            all_indices.extend_from_slice(&[
+                base_idx, base_idx+1, base_idx+2,
+                base_idx+1, base_idx+3, base_idx+2,
+            ]);
             pen_x += cached.xadvance * scale;
         }
-        vertices
+        (all_verts, all_indices)
     }
 }
 

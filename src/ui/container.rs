@@ -154,8 +154,8 @@ impl RenderBox for ContainerRenderObject {
                 self.size.width - self.margin.left - self.margin.right,
                 self.size.height - self.margin.top - self.margin.bottom,
             );
-            let bg = ctx.primitives.rounded_rect_vertices(rect, self.corner_radius, color);
-            ctx.add_command(0, bg);
+            let (verts, inds) = ctx.primitives.rounded_rect_vertices_indices(rect, self.corner_radius, color);
+            ctx.add_command(0, verts, inds);
         }
         for child in &mut self.children {
             child.render(ctx);
