@@ -2,7 +2,7 @@
 use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
-use crate::common::types::*;
+use crate::common::{Primitives, Vertex, types::*};
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
 use crate::ui_manager::UiManager;
@@ -59,6 +59,10 @@ impl Widget for Button {
             is_dragging: false,
             id: None,
             on_click: self.on_click.take(),
+            // Кэш
+            cached_vertices: Vec::new(),
+            cached_indices: Vec::new(),
+            dirty: true,
         })
     }
 }
@@ -80,6 +84,10 @@ struct ButtonRenderObject {
     is_dragging: bool,
     id: Option<WidgetId>,
     on_click: Option<Box<dyn FnMut() + Send>>,
+    // Кэш
+    cached_vertices: Vec<Vertex>,
+    cached_indices: Vec<u32>,
+    dirty: bool,
 }
 
 impl ButtonRenderObject {
@@ -94,6 +102,18 @@ impl ButtonRenderObject {
             self.color
         }
     }
+
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    fn rebuild_cache(&mut self, primitives: &dyn Primitives) {
+        let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
+        let (verts, inds) = primitives.rounded_rect_vertices_indices(rect, self.radius, self.current_color());
+        self.cached_vertices = verts;
+        self.cached_indices = inds;
+        self.dirty = false;
+    }
 }
 
 impl RenderBox for ButtonRenderObject {
@@ -103,22 +123,38 @@ impl RenderBox for ButtonRenderObject {
             text_size.width + self.padding.left + self.padding.right,
             text_size.height + self.padding.top + self.padding.bottom,
         );
-        let constrained = constraints.constrain(inner_size);
-        self.size = constrained;
-        constrained
+        let new_size = constraints.constrain(inner_size);
+        if (new_size.width - self.size.width).abs() > 0.01 || (new_size.height - self.size.height).abs() > 0.01 {
+            self.size = new_size;
+            self.mark_dirty();
+        }
+        new_size
     }
 
-    fn set_position(&mut self, pos: Point) { self.position = pos; }
+    fn set_position(&mut self, pos: Point) {
+        if self.position != pos {
+            self.position = pos;
+            self.mark_dirty();
+        }
+    }
+
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
 
     fn render(&mut self, ctx: &mut RenderContext) {
-        // Фон кнопки
-        let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-        let (verts, inds) = ctx.primitives.rounded_rect_vertices_indices(rect, self.radius, self.current_color());
-        ctx.add_command(0, verts, inds);
+        // Фон (с кэшем)
+        if self.dirty {
+            self.rebuild_cache(ctx.primitives);
+        }
+        // Сдвигаем вершины в мировые координаты (позиция виджета)
+        let mut world_verts = self.cached_vertices.clone();
+        for v in &mut world_verts {
+            v.position[0] += self.position.x;
+            v.position[1] += self.position.y;
+        }
+        ctx.add_command(0, world_verts, self.cached_indices.clone());
 
-        // Текст
+        // Текст (генерируем каждый раз, т.к. позиция текста зависит от позиции кнопки и отступов)
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
             let (verts, inds) = ctx.font_system.generate_text_vertices_with_font(
                 font,
@@ -148,15 +184,20 @@ impl RenderBox for ButtonRenderObject {
             }
             Event::PointerDown(_) => {
                 self.is_pressed = true;
+                self.mark_dirty();
                 true
             }
             Event::PointerUp(_) => {
                 self.is_pressed = false;
+                self.mark_dirty();
                 true
             }
             Event::PointerMove(point) => {
                 let inside = self.hit_test(*point);
-                self.is_hovered = inside;
+                if inside != self.is_hovered {
+                    self.is_hovered = inside;
+                    self.mark_dirty();
+                }
                 true
             }
             _ => false,
@@ -164,7 +205,12 @@ impl RenderBox for ButtonRenderObject {
     }
 
     fn can_focus(&self) -> bool { true }
-    fn set_focused(&mut self, focused: bool) { self.is_focused = focused; }
+    fn set_focused(&mut self, focused: bool) {
+        if self.is_focused != focused {
+            self.is_focused = focused;
+            self.mark_dirty();
+        }
+    }
     fn is_focused(&self) -> bool { self.is_focused }
 
     fn handle_key_down(&mut self, key: Key, _mod: KeyboardModifiers) -> bool {
@@ -190,28 +236,28 @@ impl RenderBox for ButtonRenderObject {
     }
     fn on_drag_start(&mut self, _point: Point) {
         self.is_dragging = true;
+        self.mark_dirty();
         self.is_hovered = false;
     }
     fn on_drag_end(&mut self, _cancelled: bool) {
         self.is_dragging = false;
+        self.mark_dirty();
     }
 
     fn can_drop(&self, data: &DragData) -> bool {
         matches!(data, DragData::Text(_))
     }
     fn on_drag_enter(&mut self, data: &DragData, _point: Point) {
-        if let DragData::Text(s) = data {
-            eprintln!("Button drag enter: {}", s);
-        }
+        if let DragData::Text(s) = data { eprintln!("Button drag enter: {}", s); }
         self.is_hovered = true;
+        self.mark_dirty();
     }
     fn on_drag_leave(&mut self) {
         self.is_hovered = false;
+        self.mark_dirty();
     }
     fn on_drop(&mut self, data: &DragData, _point: Point) {
-        if let DragData::Text(s) = data {
-            eprintln!("Button drop: {}", s);
-        }
+        if let DragData::Text(s) = data { eprintln!("Button drop: {}", s); }
     }
 
     fn widget_id(&self) -> Option<WidgetId> { self.id }

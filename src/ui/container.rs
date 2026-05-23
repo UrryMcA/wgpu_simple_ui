@@ -2,7 +2,8 @@
 use super::widget::{Widget, MultiChildRenderObjectWidget};
 use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
-use crate::common::types::*;
+use crate::common::primitives::Primitives;
+use crate::common::{Vertex, types::*};
 use crate::common::event::{Event, DragData};
 use crate::common::layout_strategy::*;
 use crate::layout::grid::GridLayout;
@@ -51,12 +52,9 @@ impl Container {
 }
 
 impl Widget for Container {
-    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { 
-        Size::zero() 
-    }
+    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { Size::zero() }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn padding(&self) -> EdgeInsets { self.padding }
-
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let children_render = self.children.iter_mut()
             .map(|w| w.create_render_object())
@@ -76,6 +74,9 @@ impl Widget for Container {
             position: Point::default(),
             size: Size::default(),
             id: None,
+            cached_vertices: Vec::new(),
+            cached_indices: Vec::new(),
+            dirty: true,
         })
     }
 }
@@ -94,6 +95,10 @@ pub struct ContainerRenderObject {
     position: Point,
     size: Size,
     id: Option<WidgetId>,
+    // Кэш
+    cached_vertices: Vec<Vertex>,
+    cached_indices: Vec<u32>,
+    dirty: bool,
 }
 
 impl ContainerRenderObject {
@@ -104,6 +109,28 @@ impl ContainerRenderObject {
             self.size.width - self.margin.left - self.margin.right - self.padding.left - self.padding.right,
             self.size.height - self.margin.top - self.margin.bottom - self.padding.top - self.padding.bottom,
         )
+    }
+
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    fn rebuild_cache(&mut self, primitives: &dyn Primitives) {
+        if let Some(color) = self.color {
+            let rect = Rect::new(
+                self.position.x + self.margin.left,
+                self.position.y + self.margin.top,
+                self.size.width - self.margin.left - self.margin.right,
+                self.size.height - self.margin.top - self.margin.bottom,
+            );
+            let (verts, inds) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, color);
+            self.cached_vertices = verts;
+            self.cached_indices = inds;
+        } else {
+            self.cached_vertices.clear();
+            self.cached_indices.clear();
+        }
+        self.dirty = false;
     }
 }
 
@@ -122,40 +149,41 @@ impl RenderBox for ContainerRenderObject {
             padded_size.width + self.margin.left + self.margin.right,
             padded_size.height + self.margin.top + self.margin.bottom,
         );
-        let constrained_size = constraints.constrain(with_margin);
-        self.size = constrained_size;
+        let new_size = constraints.constrain(with_margin);
+        if new_size != self.size {
+            self.size = new_size;
+            self.mark_dirty();
+        }
 
         let inner_rect = self.inner_rect();
         let mut children_refs2: Vec<&mut dyn RenderBox> = self.children.iter_mut().map(|c| c.as_mut()).collect();
         let child_rects = self.strategy.arrange(&mut children_refs2, inner_rect);
-
-        // Применяем позиции и при необходимости перевычисляем layout для растянутых детей
         const EPS: f32 = 0.1;
         for (child, rect) in self.children.iter_mut().zip(child_rects) {
             let needs_relayout = (rect.w - child.size().width).abs() > EPS || (rect.h - child.size().height).abs() > EPS;
             if needs_relayout {
-                // Пересчитываем layout ребёнка с точными ограничениями (tight)
                 child.layout(Constraints::tight(rect.w, rect.h), ctx);
             }
             child.set_position(Point::new(rect.x, rect.y));
         }
-        self.size
+        new_size
     }
 
-    fn set_position(&mut self, pos: Point) { self.position = pos; }
+    fn set_position(&mut self, pos: Point) {
+        if self.position != pos {
+            self.position = pos;
+            self.mark_dirty();
+        }
+    }
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
 
     fn render(&mut self, ctx: &mut RenderContext) {
-        if let Some(color) = self.color {
-            let rect = Rect::new(
-                self.position.x + self.margin.left,
-                self.position.y + self.margin.top,
-                self.size.width - self.margin.left - self.margin.right,
-                self.size.height - self.margin.top - self.margin.bottom,
-            );
-            let (verts, inds) = ctx.primitives.rounded_rect_vertices_indices(rect, self.corner_radius, color);
-            ctx.add_command(0, verts, inds);
+        if self.color.is_some() && self.dirty {
+            self.rebuild_cache(ctx.primitives);
+        }
+        if !self.cached_vertices.is_empty() {
+            ctx.add_command(0, self.cached_vertices.clone(), self.cached_indices.clone());
         }
         for child in &mut self.children {
             child.render(ctx);

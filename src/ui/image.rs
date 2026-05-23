@@ -2,7 +2,7 @@
 use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::RenderBox;
 use crate::common::render_context::RenderContext;
-use crate::common::types::*;
+use crate::common::{Primitives, Vertex, types::*};
 
 pub struct Image {
     texture_id: u64,
@@ -30,6 +30,9 @@ impl Widget for Image {
             size: self.size,
             margin: self.margin,
             position: Point::default(),
+            cached_vertices: Vec::new(),
+            cached_indices: Vec::new(),
+            dirty: true,
         })
     }
 }
@@ -41,25 +44,53 @@ struct ImageRenderObject {
     size: Size,
     margin: EdgeInsets,
     position: Point,
+    // Кэш
+    cached_vertices: Vec<Vertex>,
+    cached_indices: Vec<u32>,
+    dirty: bool,
+}
+
+impl ImageRenderObject {
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    fn rebuild_cache(&mut self, primitives: &dyn Primitives) {
+        let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
+        let tex_coords = TexCoords::new(0.0, 0.0, 1.0, 1.0);
+        let color = UColor([1.0, 1.0, 1.0, 1.0]);
+        let (verts, inds) = primitives.textured_rect_vertices_indices(rect, tex_coords, color);
+        self.cached_vertices = verts;
+        self.cached_indices = inds;
+        self.dirty = false;
+    }
 }
 
 impl RenderBox for ImageRenderObject {
     fn layout(&mut self, constraints: Constraints, _ctx: &mut dyn LayoutContext) -> Size {
-        let s = constraints.constrain(self.size);
-        self.size = s;
-        s
+        let new_size = constraints.constrain(self.size);
+        if new_size != self.size {
+            self.size = new_size;
+            self.mark_dirty();
+        }
+        new_size
     }
 
-    fn set_position(&mut self, pos: Point) { self.position = pos; }
+    fn set_position(&mut self, pos: Point) {
+        if self.position != pos {
+            self.position = pos;
+            self.mark_dirty();
+        }
+    }
+
     fn position(&self) -> Point { self.position }
     fn size(&self) -> Size { self.size }
 
     fn render(&mut self, ctx: &mut RenderContext) {
-        let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-        let tex_coords = TexCoords::new(0.0, 0.0, 1.0, 1.0);
-        let color = UColor([1.0, 1.0, 1.0, 1.0]);
-        let (verts, inds) = ctx.primitives.textured_rect_vertices_indices(rect, tex_coords, color);
-        ctx.add_command(self.texture_id, verts, inds);
+        if self.dirty {
+            self.rebuild_cache(ctx.primitives);
+        }
+        ctx.add_command(self.texture_id, self.cached_vertices.clone(), self.cached_indices.clone());
     }
 
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }

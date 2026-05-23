@@ -2,7 +2,7 @@
 use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::RenderBox;
 use crate::common::render_context::RenderContext;
-use crate::common::types::*;
+use crate::common::{Vertex, types::*};
 
 pub struct Label {
     text: String,
@@ -41,6 +41,10 @@ impl Widget for Label {
             margin: self.margin,
             position: Point::default(),
             size: Size::default(),
+            // Кэш
+            cached_vertices: Vec::new(),
+            cached_indices: Vec::new(),
+            dirty: true,
         })
     }
 }
@@ -55,21 +59,18 @@ struct LabelRenderObject {
     margin: EdgeInsets,
     position: Point,
     size: Size,
+    // Кэш
+    cached_vertices: Vec<Vertex>,
+    cached_indices: Vec<u32>,
+    dirty: bool,
 }
 
-impl RenderBox for LabelRenderObject {
-    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
-        let text_size = ctx.measure_text_with_font(&self.font_name, &self.text, self.font_size, constraints.max_width);
-        let constrained = constraints.constrain(text_size);
-        self.size = constrained;
-        constrained
+impl LabelRenderObject {
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
 
-    fn set_position(&mut self, pos: Point) { self.position = pos; }
-    fn position(&self) -> Point { self.position }
-    fn size(&self) -> Size { self.size }
-
-    fn render(&mut self, ctx: &mut RenderContext) {
+    fn rebuild_cache(&mut self, ctx: &mut RenderContext) {
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
             let (verts, inds) = ctx.font_system.generate_text_vertices_with_font(
                 font,
@@ -80,7 +81,47 @@ impl RenderBox for LabelRenderObject {
                 self.color,
                 ctx.primitives,
             );
-            ctx.add_command(font.texture_id(), verts, inds);
+            self.cached_vertices = verts;
+            self.cached_indices = inds;
+        } else {
+            self.cached_vertices.clear();
+            self.cached_indices.clear();
+        }
+        self.dirty = false;
+    }
+}
+
+impl RenderBox for LabelRenderObject {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
+        let new_size = ctx.measure_text_with_font(&self.font_name, &self.text, self.font_size, constraints.max_width);
+        let new_size = constraints.constrain(new_size);
+        if new_size != self.size {
+            self.size = new_size;
+            self.mark_dirty();
+        }
+        new_size
+    }
+
+    fn set_position(&mut self, pos: Point) {
+        if self.position != pos {
+            self.position = pos;
+            self.mark_dirty();
+        }
+    }
+
+    fn position(&self) -> Point { self.position }
+    fn size(&self) -> Size { self.size }
+
+    fn render(&mut self, ctx: &mut RenderContext) {
+        if self.dirty {
+            self.rebuild_cache(ctx);
+        }
+        if !self.cached_vertices.is_empty() {
+            ctx.add_command(
+                ctx.font_system.get_font(&self.font_name).map(|f| f.texture_id()).unwrap_or(0),
+                self.cached_vertices.clone(),
+                self.cached_indices.clone(),
+            );
         }
     }
 

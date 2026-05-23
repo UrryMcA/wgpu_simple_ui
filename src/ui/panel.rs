@@ -2,7 +2,8 @@
 use super::widget::Widget;
 use crate::common::render_box::RenderBox;
 use crate::common::render_context::RenderContext;
-use crate::common::types::*;
+use crate::common::primitives::Primitives;
+use crate::common::{Vertex, types::*};
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
 use crate::ui_manager::UiManager;
@@ -50,6 +51,9 @@ impl Widget for Panel {
             position: Point::default(),
             size: Size::default(),
             id: None,
+            cached_vertices: Vec::new(),
+            cached_indices: Vec::new(),
+            dirty: true,
         })
     }
 }
@@ -63,57 +67,71 @@ struct PanelRenderObject {
     position: Point,
     size: Size,
     id: Option<u64>,
+    // Кэш
+    cached_vertices: Vec<Vertex>,
+    cached_indices: Vec<u32>,
+    dirty: bool,
 }
 
 impl PanelRenderObject {
-}
-
-impl RenderBox for PanelRenderObject {
-    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
-        if self.id.is_none() { /* регистрация (можно закомментировать или реализовать позже) */ }
-        
-        // Суммируем margin и padding для вычитания из ограничений
-        let total_horizontal = self.margin.left + self.margin.right + self.padding.left + self.padding.right;
-        let total_vertical = self.margin.top + self.margin.bottom + self.padding.top + self.padding.bottom;
-        
-        let inner_constraints = Constraints {
-            min_width: (constraints.min_width - total_horizontal).max(0.0),
-            max_width: (constraints.max_width - total_horizontal).max(0.0),
-            min_height: (constraints.min_height - total_vertical).max(0.0),
-            max_height: (constraints.max_height - total_vertical).max(0.0),
-        };
-        
-        let child_size = self.child.layout(inner_constraints, ctx);
-        let total_size = Size::new(
-            child_size.width + total_horizontal,
-            child_size.height + total_vertical,
-        );
-        let constrained_size = constraints.constrain(total_size);
-        self.size = constrained_size;
-        
-        // Позиционируем ребёнка после того, как известен размер панели
-        let inner_origin = Point::new(
-            self.position.x + self.margin.left + self.padding.left,
-            self.position.y + self.margin.top + self.padding.top,
-        );
-        self.child.set_position(inner_origin);
-        
-        self.size
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
-    
-    fn set_position(&mut self, pos: Point) { self.position = pos; }
-    fn position(&self) -> Point { self.position }
-    fn size(&self) -> Size { self.size }
 
-    fn render(&mut self, ctx: &mut RenderContext) {
+    fn rebuild_cache(&mut self, primitives: &dyn Primitives) {
         let rect = Rect::new(
             self.position.x + self.margin.left,
             self.position.y + self.margin.top,
             self.size.width - self.margin.left - self.margin.right,
             self.size.height - self.margin.top - self.margin.bottom,
         );
-        let (verts, inds) = ctx.primitives.rounded_rect_vertices_indices(rect, self.corner_radius, self.background_color);
-        ctx.add_command(0, verts, inds);
+        let (verts, inds) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, self.background_color);
+        self.cached_vertices = verts;
+        self.cached_indices = inds;
+        self.dirty = false;
+    }
+}
+
+impl RenderBox for PanelRenderObject {
+    fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
+        let total_horizontal = self.margin.left + self.margin.right + self.padding.left + self.padding.right;
+        let total_vertical = self.margin.top + self.margin.bottom + self.padding.top + self.padding.bottom;
+        let inner_constraints = Constraints {
+            min_width: (constraints.min_width - total_horizontal).max(0.0),
+            max_width: (constraints.max_width - total_horizontal).max(0.0),
+            min_height: (constraints.min_height - total_vertical).max(0.0),
+            max_height: (constraints.max_height - total_vertical).max(0.0),
+        };
+        let child_size = self.child.layout(inner_constraints, ctx);
+        let total_size = Size::new(child_size.width + total_horizontal, child_size.height + total_vertical);
+        let new_size = constraints.constrain(total_size);
+        if new_size != self.size {
+            self.size = new_size;
+            self.mark_dirty();
+        }
+        let inner_origin = Point::new(
+            self.position.x + self.margin.left + self.padding.left,
+            self.position.y + self.margin.top + self.padding.top,
+        );
+        self.child.set_position(inner_origin);
+        new_size
+    }
+
+    fn set_position(&mut self, pos: Point) {
+        if self.position != pos {
+            self.position = pos;
+            self.mark_dirty();
+        }
+    }
+
+    fn position(&self) -> Point { self.position }
+    fn size(&self) -> Size { self.size }
+
+    fn render(&mut self, ctx: &mut RenderContext) {
+        if self.dirty {
+            self.rebuild_cache(ctx.primitives);
+        }
+        ctx.add_command(0, self.cached_vertices.clone(), self.cached_indices.clone());
         self.child.render(ctx);
     }
 
@@ -129,36 +147,30 @@ impl RenderBox for PanelRenderObject {
         );
         rect.contains(point)
     }
-    
+
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
-        // Сначала проверяем попадание, если у события есть точка
         if let Some(point) = event.point() {
             if !self.hit_test(point) {
                 return false;
             }
         }
-        // Проксируем событие ребёнку
         self.child.handle_event(event, ui_manager)
     }
-    
+
     fn can_focus(&self) -> bool { self.child.can_focus() }
     fn set_focused(&mut self, focused: bool) { self.child.set_focused(focused); }
     fn is_focused(&self) -> bool { self.child.is_focused() }
-    
     fn handle_key_down(&mut self, key: Key, mods: KeyboardModifiers) -> bool { self.child.handle_key_down(key, mods) }
     fn handle_key_up(&mut self, key: Key, mods: KeyboardModifiers) -> bool { self.child.handle_key_up(key, mods) }
     fn handle_char_input(&mut self, ch: char) -> bool { self.child.handle_char_input(ch) }
-    
     fn can_drag(&self) -> bool { self.child.can_drag() }
     fn drag_data(&self) -> Option<DragData> { self.child.drag_data() }
     fn on_drag_start(&mut self, point: Point) { self.child.on_drag_start(point); }
     fn on_drag_move(&mut self, point: Point) { self.child.on_drag_move(point); }
     fn on_drag_end(&mut self, cancelled: bool) { self.child.on_drag_end(cancelled); }
-    
     fn can_drop(&self, data: &DragData) -> bool { self.child.can_drop(data) }
     fn on_drag_enter(&mut self, data: &DragData, point: Point) { self.child.on_drag_enter(data, point); }
     fn on_drag_leave(&mut self) { self.child.on_drag_leave(); }
     fn on_drop(&mut self, data: &DragData, point: Point) { self.child.on_drop(data, point); }
-    
     fn widget_id(&self) -> Option<u64> { self.id }
 }
