@@ -19,7 +19,7 @@ struct TextureEntry {
 }
 
 impl TextureManager {
-    pub fn new(device: &Device, bind_group_layout: &BindGroupLayout) -> Self {
+   pub fn new(device: &Device, queue: &Queue, bind_group_layout: &BindGroupLayout) -> Self {
         let fallback_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("fallback_texture"),
             size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
@@ -30,6 +30,24 @@ impl TextureManager {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
+
+        // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: записываем белый непрозрачный пиксель
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &fallback_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &[255, 255, 255, 255], // RGBA: белый, alpha=255
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4),   // 4 байта на 1 пиксель
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+        );
+
         let fallback_view = fallback_texture.create_view(&Default::default());
         let fallback_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
         let fallback_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {

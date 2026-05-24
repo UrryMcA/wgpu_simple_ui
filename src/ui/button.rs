@@ -108,6 +108,10 @@ impl ButtonRenderObject {
     }
 
     fn rebuild_cache(&mut self, primitives: &dyn Primitives) {
+        if self.size.width < 1.0 || self.size.height < 1.0 {
+            // Не сбрасываем dirty — попробуем в следующем кадре
+            return;
+        }
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         let (verts, inds) = primitives.rounded_rect_vertices_indices(rect, self.radius, self.current_color());
         self.cached_vertices = verts;

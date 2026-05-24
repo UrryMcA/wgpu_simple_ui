@@ -123,6 +123,8 @@ impl Primitives for DefaultPrimitives {
         }
         triangles
     }
+// primitives_impl.rs
+
 
     fn rounded_rect_vertices(&self, rect: Rect, radius: f32, color: UColor) -> Vec<Vertex> {
         let x = rect.x; let y = rect.y;
@@ -256,16 +258,274 @@ impl Primitives for DefaultPrimitives {
         (vertices, indices)
     }
 
-    fn rounded_rect_vertices_indices(&self, rect: Rect, radius: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
-        let vertices = self.rounded_rect_vertices(rect, radius, color);
-        let indices = (0..vertices.len() as u32).collect();
-        (vertices, indices)
-    }
 
-    fn rounded_rect_outline_vertices_indices(&self, rect: Rect, radius: f32, thickness: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
-        let vertices = self.rounded_rect_outline_vertices(rect, radius, thickness, color);
-        let indices = (0..vertices.len() as u32).collect();
-        (vertices, indices)
+fn rounded_rect_outline_vertices_indices(
+    &self,
+    rect: Rect,
+    radius: f32,
+    thickness: f32,
+    color: UColor,
+) -> (Vec<Vertex>, Vec<u32>) {
+    let x = rect.x;
+    let y = rect.y;
+    let w = rect.w;
+    let h = rect.h;
+    let r = radius.min(w * 0.5).min(h * 0.5);
+    let c = color.0;
+    
+    // Внутренний и внешний радиусы
+    let half_thick = thickness * 0.5;
+    let inner_r = (r - half_thick).max(0.0);
+    let outer_r = r + half_thick;
+    
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    
+    let segments = 8;
+    let angle_step = std::f32::consts::FRAC_PI_2 / segments as f32;
+    
+    // Вспомогательная функция для добавления пары вершин (внутренняя + внешняя)
+    let mut add_vertex_pair = |px_inner: f32, py_inner: f32, px_outer: f32, py_outer: f32| {
+        let base_idx = vertices.len() as u32;
+        
+        // Внутренняя вершина
+        vertices.push(Vertex {
+            position: [px_inner, py_inner],
+            tex_coord: [(px_inner - x) / w, (py_inner - y) / h],
+            color: c,
+        });
+        
+        // Внешняя вершина
+        vertices.push(Vertex {
+            position: [px_outer, py_outer],
+            tex_coord: [(px_outer - x) / w, (py_outer - y) / h],
+            color: c,
+        });
+        
+        base_idx
+    };
+    
+    // Генерируем вершины последовательно по часовой стрелке
+    
+    // 1. Верхняя сторона (слева направо)
+    add_vertex_pair(x + inner_r, y + half_thick, x + outer_r, y - half_thick);
+    
+    // 2. Верхний правый угол
+    let corner_cx = x + w - r;
+    let corner_cy = y + r;
+    for i in 0..=segments {
+        let angle = -std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        
+        let px_inner = corner_cx + inner_r * cos_a;
+        let py_inner = corner_cy + inner_r * sin_a;
+        let px_outer = corner_cx + outer_r * cos_a;
+        let py_outer = corner_cy + outer_r * sin_a;
+        
+        add_vertex_pair(px_inner, py_inner, px_outer, py_outer);
     }
     
+    // 3. Правая сторона (сверху вниз)
+    add_vertex_pair(x + w - half_thick, y + h - inner_r, x + w + half_thick, y + h - outer_r);
+    
+    // 4. Нижний правый угол
+    let corner_cx = x + w - r;
+    let corner_cy = y + h - r;
+    for i in 0..=segments {
+        let angle = angle_step * i as f32;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        
+        let px_inner = corner_cx + inner_r * cos_a;
+        let py_inner = corner_cy + inner_r * sin_a;
+        let px_outer = corner_cx + outer_r * cos_a;
+        let py_outer = corner_cy + outer_r * sin_a;
+        
+        add_vertex_pair(px_inner, py_inner, px_outer, py_outer);
+    }
+    
+    // 5. Нижняя сторона (справа налево)
+    add_vertex_pair(x + w - inner_r, y + h - half_thick, x + w - outer_r, y + h + half_thick);
+    
+    // 6. Нижний левый угол
+    let corner_cx = x + r;
+    let corner_cy = y + h - r;
+    for i in 0..=segments {
+        let angle = std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        
+        let px_inner = corner_cx + inner_r * cos_a;
+        let py_inner = corner_cy + inner_r * sin_a;
+        let px_outer = corner_cx + outer_r * cos_a;
+        let py_outer = corner_cy + outer_r * sin_a;
+        
+        add_vertex_pair(px_inner, py_inner, px_outer, py_outer);
+    }
+    
+    // 7. Левая сторона (снизу вверх)
+    add_vertex_pair(x + half_thick, y + h - inner_r, x - half_thick, y + h - outer_r);
+    
+    // 8. Верхний левый угол
+    let corner_cx = x + r;
+    let corner_cy = y + r;
+    for i in 0..=segments {
+        let angle = std::f32::consts::PI + angle_step * i as f32;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        
+        let px_inner = corner_cx + inner_r * cos_a;
+        let py_inner = corner_cy + inner_r * sin_a;
+        let px_outer = corner_cx + outer_r * cos_a;
+        let py_outer = corner_cy + outer_r * sin_a;
+        
+        add_vertex_pair(px_inner, py_inner, px_outer, py_outer);
+    }
+    
+    // Генерируем индексы (соединяем внутренний и внешний периметры)
+    let pair_count = vertices.len() as u32 / 2;
+    for i in 0..pair_count {
+        let current_inner = i * 2;
+        let current_outer = i * 2 + 1;
+        let next_inner = if i + 1 == pair_count { 0 } else { (i + 1) * 2 };
+        let next_outer = if i + 1 == pair_count { 1 } else { (i + 1) * 2 + 1 };
+        
+        // Первый треугольник: current_inner -> current_outer -> next_inner
+        indices.push(current_inner);
+        indices.push(current_outer);
+        indices.push(next_inner);
+        
+        // Второй треугольник: next_inner -> current_outer -> next_outer
+        indices.push(next_inner);
+        indices.push(current_outer);
+        indices.push(next_outer);
+    }
+    
+    (vertices, indices)
+}
+
+fn rounded_rect_vertices_indices(&self, rect: Rect, radius: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>) {
+    let x = rect.x;
+    let y = rect.y;
+    let w = rect.w;
+    let h = rect.h;
+    let r = radius.min(w * 0.5).min(h * 0.5);
+    let c = color.0;
+    
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    
+    // Центральная вершина (индекс 0)
+    let center_x = x + w * 0.5;
+    let center_y = y + h * 0.5;
+    vertices.push(Vertex {
+        position: [center_x, center_y],
+        tex_coord: [0.5, 0.5],
+        color: c,
+    });
+    
+    // Количество сегментов для каждого угла (90 градусов)
+    let segments = 8;
+    let angle_step = std::f32::consts::FRAC_PI_2 / segments as f32;
+    
+    // Генерируем вершины периметра ПОСЛЕДОВАТЕЛЬНО по часовой стрелке
+    
+    // 1. Верхняя сторона (слева направо, после верхнего левого скругления)
+    vertices.push(Vertex {
+        position: [x + r, y],
+        tex_coord: [r / w, 0.0],
+        color: c,
+    });
+    
+    // 2. Верхний правый угол (от 270° до 360°, т.е. от -90° до 0°)
+    let corner_cx = x + w - r;
+    let corner_cy = y + r;
+    for i in 0..=segments {
+        let angle = -std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
+        let px = corner_cx + r * angle.cos();
+        let py = corner_cy + r * angle.sin();
+        vertices.push(Vertex {
+            position: [px, py],
+            tex_coord: [(px - x) / w, (py - y) / h],
+            color: c,
+        });
+    }
+    
+    // 3. Правая сторона (сверху вниз)
+    vertices.push(Vertex {
+        position: [x + w, y + h - r],
+        tex_coord: [1.0, (h - r) / h],
+        color: c,
+    });
+    
+    // 4. Нижний правый угол (от 0° до 90°)
+    let corner_cx = x + w - r;
+    let corner_cy = y + h - r;
+    for i in 0..=segments {
+        let angle = angle_step * i as f32;
+        let px = corner_cx + r * angle.cos();
+        let py = corner_cy + r * angle.sin();
+        vertices.push(Vertex {
+            position: [px, py],
+            tex_coord: [(px - x) / w, (py - y) / h],
+            color: c,
+        });
+    }
+    
+    // 5. Нижняя сторона (справа налево)
+    vertices.push(Vertex {
+        position: [x + r, y + h],
+        tex_coord: [r / w, 1.0],
+        color: c,
+    });
+    
+    // 6. Нижний левый угол (от 90° до 180°)
+    let corner_cx = x + r;
+    let corner_cy = y + h - r;
+    for i in 0..=segments {
+        let angle = std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
+        let px = corner_cx + r * angle.cos();
+        let py = corner_cy + r * angle.sin();
+        vertices.push(Vertex {
+            position: [px, py],
+            tex_coord: [(px - x) / w, (py - y) / h],
+            color: c,
+        });
+    }
+    
+    // 7. Левая сторона (снизу вверх)
+    vertices.push(Vertex {
+        position: [x, y + r],
+        tex_coord: [0.0, r / h],
+        color: c,
+    });
+    
+    // 8. Верхний левый угол (от 180° до 270°)
+    let corner_cx = x + r;
+    let corner_cy = y + r;
+    for i in 0..=segments {
+        let angle = std::f32::consts::PI + angle_step * i as f32;
+        let px = corner_cx + r * angle.cos();
+        let py = corner_cy + r * angle.sin();
+        vertices.push(Vertex {
+            position: [px, py],
+            tex_coord: [(px - x) / w, (py - y) / h],
+            color: c,
+        });
+    }
+    
+    // Генерируем индексы (треугольники-веер от центра)
+    let perimeter_count = vertices.len() as u32 - 1; // минус центральная вершина
+    for i in 0..perimeter_count {
+        let current = i + 1;
+        let next = if i + 1 == perimeter_count { 1 } else { i + 2 };
+        indices.push(0); // центр
+        indices.push(current);
+        indices.push(next);
+    }
+    
+    (vertices, indices)
+}
+
 }
