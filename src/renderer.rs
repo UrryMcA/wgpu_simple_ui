@@ -24,6 +24,7 @@ pub struct UiRenderer {
     vertex_buffer: wgpu::Buffer,
     surface_width: u32,
     surface_height: u32,
+    index_buffer: wgpu::Buffer,
 }
 
 impl UiRenderer {
@@ -116,7 +117,12 @@ impl UiRenderer {
                 })],
                 compilation_options: Default::default(),
             }),
-            primitive: wgpu::PrimitiveState::default(),
+
+            //primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: None, // Отключаем back-face culling для 2D UI
+                ..wgpu::PrimitiveState::default()
+            },            
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
@@ -127,6 +133,13 @@ impl UiRenderer {
             label: Some("ui_vertex_buffer"),
             size: (Self::MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("ui_index_buffer"),
+            size: (Self::MAX_VERTICES * 3 / 2 * std::mem::size_of::<u32>()) as u64, // ~1.5 индекса на вершину
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -149,6 +162,7 @@ impl UiRenderer {
             vertex_buffer,
             surface_width: width,
             surface_height: height,
+            index_buffer: index_buffer,
         }
     }
 
@@ -256,7 +270,70 @@ impl UiRenderer {
     }
 
     /// Выполняет сгруппированные draw call'ы с учётом scissor-прямоугольников.
+    /// 
     fn execute_commands(&mut self, render_pass: &mut RenderPass) {
+        // Группируем вершины И индексы вместе
+        type DrawGroupKey = (u64, Option<(u32, u32, u32, u32)>);
+        let mut groups: HashMap<DrawGroupKey, (Vec<Vertex>, Vec<u32>)> = HashMap::new();
+
+        for cmd in self.commands.drain(..) {
+            let key_scissor = cmd.scissor_rect.map(|rect| {
+                (rect.x.max(0.0) as u32, rect.y.max(0.0) as u32, rect.w.max(0.0) as u32, rect.h.max(0.0) as u32)
+            });
+            let group = groups.entry((cmd.texture_id, key_scissor)).or_insert_with(|| (Vec::new(), Vec::new()));
+            group.0.extend(cmd.vertices);
+            group.1.extend(cmd.indices);
+        }
+
+        let mut all_vertices: Vec<Vertex> = Vec::new();
+        let mut all_indices: Vec<u32> = Vec::new();
+        let mut draw_calls: Vec<(u64, Option<(u32, u32, u32, u32)>, u32, u32)> = Vec::new(); // tid, scissor, idx_start, idx_count
+
+        for ((tid, scissor_key), (verts, idxs)) in groups {
+            let base_vertex = all_vertices.len() as u32;
+            let idx_start = all_indices.len() as u32;
+
+            all_vertices.extend(verts);
+            // Корректируем индексы на текущий базовый сдвиг вершин в общем буфере
+            let idx_count = idxs.len() as u32; // 1️⃣ Запоминаем длину заранее
+            let adjusted_indices: Vec<u32> = idxs.into_iter().map(|i| i + base_vertex).collect();
+            all_indices.extend(adjusted_indices); // 2️⃣ Теперь безопасно отдаём владение
+            draw_calls.push((tid, scissor_key, idx_start, idx_count)); // 3️⃣ Используем сохранённое значение
+        }
+
+        if all_vertices.is_empty() { return; }
+
+        // Загружаем оба буфера
+        self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
+        self.queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&all_indices));
+        
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+        let texture_manager = self.ui_manager.texture_manager();
+        for (tid, scissor_key, idx_start, idx_count) in draw_calls {
+            let bind_group = if tid == 0 {
+                texture_manager.get_fallback_bind_group()
+            } else {
+                texture_manager.get_bind_group(tid)
+                    .unwrap_or_else(|| texture_manager.get_fallback_bind_group())
+            };
+            render_pass.set_bind_group(1, bind_group, &[]);
+
+            if let Some((x, y, w, h)) = scissor_key {
+                if w > 0 && h > 0 {
+                    render_pass.set_scissor_rect(x, y, w, h);
+                } else { continue; }
+            } else {
+                render_pass.set_scissor_rect(0, 0, self.surface_width, self.surface_height);
+            }
+
+            // ✅ Используем индексную отрисовку
+            render_pass.draw_indexed(idx_start..(idx_start + idx_count), 0, 0..1);
+        }
+    }
+
+    fn execute_commandsOLD(&mut self, render_pass: &mut RenderPass) {
         let mut groups: HashMap<DrawGroupKey, Vec<Vec<Vertex>>> = HashMap::new();
 
         for cmd in self.commands.drain(..) {
@@ -313,6 +390,7 @@ impl UiRenderer {
             }
 
             render_pass.draw(start..start + count, 0..1);
+            //render_pass.draw_indexed(0..indices_count, 0, 0..1);
         }
     }
 }

@@ -68,9 +68,18 @@ impl FontSystem {
         let color = UColor([1.0, 1.0, 1.0, 1.0]);
         let (verts, _) = primitives.textured_rect_vertices_indices(rect, tex_coords, color);
         assert_eq!(verts.len(), 4, "textured_rect_vertices_indices must return exactly 4 vertices");
+         
         let mut cached_vertices = [verts[0]; 4];
         cached_vertices.copy_from_slice(&verts);
 
+/*        // Преобразуем 6 вершин в массив из 4 вершин (как ожидает CachedGlyph)
+        // Или измените CachedGlyph на хранение 6 вершин
+        let mut cached_vertices = [verts[0]; 4];
+        cached_vertices[0] = verts[0];
+        cached_vertices[1] = verts[1];
+        cached_vertices[2] = verts[2];
+        cached_vertices[3] = verts[4];
+*/
         let cached = CachedGlyph {
             vertices: cached_vertices,
             width: glyph_info.width,
@@ -160,9 +169,16 @@ impl FontSystem {
                 all_verts.push(vert);
             }
             // Индексы для прямоугольника (6 штук) на 4 вершины
+            /*
             all_indices.extend_from_slice(&[
                 base_idx, base_idx+1, base_idx+2,
                 base_idx+1, base_idx+3, base_idx+2,
+            ]);
+             */
+            // СТАЛО (совпадает с primitives_impl.rs):
+            all_indices.extend_from_slice(&[
+                base_idx, base_idx + 1, base_idx + 2,
+                base_idx, base_idx + 2, base_idx + 3,
             ]);
             pen_x += cached.xadvance * scale;
         }
