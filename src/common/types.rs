@@ -68,6 +68,22 @@ impl UColor {
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self([r, g, b, a])
     }
+     pub fn from_hsv(h: f32, s: f32, v: f32, a: f32) -> Self {
+        let (r, g, b) = {
+            if s == 0.0 { (v, v, v) } else {
+                let i = (h * 6.0).floor() as i32 % 6;
+                let f = h * 6.0 - i as f32;
+                let p = v * (1.0 - s);
+                let q = v * (1.0 - s * f);
+                let t = v * (1.0 - s * (1.0 - f));
+                match i {
+                    0 => (v, t, p), 1 => (q, v, p), 2 => (p, v, t),
+                    3 => (p, q, v), 4 => (t, p, v), _ => (v, p, q),
+                }
+            }
+        };
+        UColor([r, g, b, a])
+    }
 }
 
 /// Линия, заданная двумя точками и толщиной
@@ -206,6 +222,12 @@ impl EdgeInsets {
             w: rect.w - self.left - self.right,
             h: rect.h - self.top - self.bottom,
         }
+    }
+    pub fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
+        Self { top, right, bottom, left }
+    }
+    pub fn symmetrical(horizontal: f32, vertical: f32) -> Self {
+        Self { top: vertical, bottom: vertical, left: horizontal, right: horizontal }
     }
 }
 
