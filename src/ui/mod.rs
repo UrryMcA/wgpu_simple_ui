@@ -3,6 +3,7 @@ pub mod outline_rect;
 pub mod button;
 pub mod label;
 pub mod image;
+pub mod icon_button;
 pub mod container;
 pub mod stack;
 pub mod positioned;

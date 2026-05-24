@@ -307,3 +307,74 @@ pub struct CachedGlyph {
     /// Шаг по X до следующего глифа.
     pub xadvance: f32,
 }
+
+
+/// Стратегии заполнения/масштабирования текстуры в заданной области.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BackgroundFit {
+    /// Растянуть на весь прямоугольник (игнорирует aspect ratio)
+    Stretch,
+    /// Повторять текстуру (черепица). `scale` задаёт относительный размер одного тайла (1.0 = оригинал, 0.5 = в 2 раза крупнее).
+    Tile { scale: f32 },
+    /// Вписать полностью с сохранением пропорций (letterbox/pillarbox)
+    Fit,
+    /// Заполнить полностью, обрезав края (crop/cover)
+    Cover,
+    /// Оставить оригинальный размер (или уменьшить, если не влезает), выровнять по центру
+    Center,
+}
+
+impl BackgroundFit {
+    /// Вычисляет UV-координаты для заданной области отрисовки и размера текстуры.
+    /// Возвращённые `TexCoords` можно напрямую передать в `Primitives`.
+    pub fn calculate_tex_coords(&self, rect: &Rect, tex_size: Size) -> TexCoords {
+        // Защита от деления на ноль
+        let rw = rect.w.max(1.0);
+        let rh = rect.h.max(1.0);
+        let tw = tex_size.width.max(1.0);
+        let th = tex_size.height.max(1.0);
+
+        match self {
+            Self::Stretch => TexCoords::new(0.0, 0.0, 1.0, 1.0),
+            
+            Self::Tile { scale } => {
+                let s = scale.max(0.01);
+                // UV > 1.0 требует sampler address_mode: Repeat
+                let reps_w = (rw / (tw * s)).max(1.0);
+                let reps_h = (rh / (th * s)).max(1.0);
+                TexCoords::new(0.0, 0.0, reps_w, reps_h)
+            }
+            
+            Self::Fit => {
+                // Масштабируем так, чтобы вся текстура влезла в rect
+                let scale = (rw / tw).min(rh / th);
+                let draw_w = tw * scale;
+                let draw_h = th * scale;
+                // Вычисляем смещение UV для центрирования
+                let u0 = 0.5 * (1.0 - draw_w / rw);
+                let v0 = 0.5 * (1.0 - draw_h / rh);
+                TexCoords::new(u0, v0, u0 + draw_w / rw, v0 + draw_h / rh)
+            }
+            
+            Self::Cover => {
+                // Масштабируем так, чтобы rect был полностью заполнен (обрезка по краям)
+                let scale = (rw / tw).max(rh / th);
+                let draw_w = tw * scale;
+                let draw_h = th * scale;
+                let u0 = 0.5 * (1.0 - draw_w / rw);
+                let v0 = 0.5 * (1.0 - draw_h / rh);
+                TexCoords::new(u0, v0, u0 + draw_w / rw, v0 + draw_h / rh)
+            }
+            
+            Self::Center => {
+                // Оригинальный размер, но не больше rect
+                let scale = 1.0_f32.min((rw / tw).min(rh / th));
+                let draw_w = tw * scale;
+                let draw_h = th * scale;
+                let u0 = 0.5 * (1.0 - draw_w / rw);
+                let v0 = 0.5 * (1.0 - draw_h / rh);
+                TexCoords::new(u0, v0, u0 + draw_w / rw, v0 + draw_h / rh)
+            }
+        }
+    }
+}

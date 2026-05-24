@@ -33,4 +33,12 @@ pub trait Primitives {
     fn rounded_rect_vertices_indices(&self, rect: Rect, radius: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>);
     fn rounded_rect_outline_vertices_indices(&self, rect: Rect, radius: f32, thickness: f32, color: UColor) -> (Vec<Vertex>, Vec<u32>);
     
+        // Текстурированный скруглённый прямоугольник с кастомными UV и тинтом
+    fn rounded_textured_rect_vertices_indices(
+        &self, 
+        rect: Rect, 
+        radius: f32, 
+        tex_coords: TexCoords, 
+        tint: UColor
+    ) -> (Vec<Vertex>, Vec<u32>);
 }

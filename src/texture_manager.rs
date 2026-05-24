@@ -9,6 +9,7 @@ pub struct TextureManager {
     bind_group_layout: BindGroupLayout,
     fallback_bind_group: BindGroup,
     sizes: HashMap<String, Size>, 
+    sizes_by_id: HashMap<u64, Size>,
 }
 
 struct TextureEntry {
@@ -71,6 +72,7 @@ impl TextureManager {
             bind_group_layout: bind_group_layout.clone(),
             fallback_bind_group,
             sizes: HashMap::new(),
+            sizes_by_id: HashMap::new(),
         }
     }
 
@@ -118,13 +120,19 @@ impl TextureManager {
         });
         let id = self.next_id;
         self.textures.insert(id, TextureEntry { _texture: texture, _view: view, _sampler: sampler, bind_group });
-        self.sizes.insert(label.to_string(), Size::new(width as f32, height as f32));
+        let size = Size::new(width as f32, height as f32);
+        self.sizes.insert(label.to_string(), size);
+        self.sizes_by_id.insert(id, size);
         self.next_id += 1;
         id
     }
 
     pub fn get_size(&self, name: &str) -> Option<Size> {
         self.sizes.get(name).copied()
+    }
+    
+    pub fn get_size_by_id(&self, id: u64) -> Option<Size> {
+        self.sizes_by_id.get(&id).copied()
     }
 
     pub fn get_bind_group(&self, id: u64) -> Option<&BindGroup> {
