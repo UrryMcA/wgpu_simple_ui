@@ -9,6 +9,7 @@ pub mod stack;
 pub mod positioned;
 pub mod panel;
 pub mod canvas;
+pub mod canvas_button;
 pub mod scrollable_container;
 
 pub use widget::{Widget, SingleChildRenderObjectWidget, MultiChildRenderObjectWidget, LeafRenderObjectWidget};

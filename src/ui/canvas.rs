@@ -21,9 +21,9 @@ pub enum CanvasItem {
 }
 
 pub struct Canvas {
-    width: f32,
-    height: f32,
-    items: Vec<CanvasItem>,
+    pub width: f32,
+    pub height: f32,
+    pub items: Vec<CanvasItem>,
     margin: EdgeInsets,
     /// Опциональный callback для hit-testing по координатам
     on_click: Option<Box<dyn FnMut(Point) + Send>>,
