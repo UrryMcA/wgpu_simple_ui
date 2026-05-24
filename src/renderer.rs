@@ -347,6 +347,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 "#;
 
 const FRAGMENT_SHADER: &str = r#"
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) tex_coord: vec2<f32>,
+    @location(1) color: vec4<f32>,
+};
+
 @group(1) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(1) @binding(1) var s_diffuse: sampler;
 @fragment

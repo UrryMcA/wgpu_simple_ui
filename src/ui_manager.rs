@@ -287,6 +287,10 @@ impl UiManager {
                     } else {
                         self.clear_focus();
                     }
+                } else {
+                    if let Some(widget_id) = self.hit_test(*point) {
+                        self.send_event_to_widget(widget_id, &&Event::PointerDown( *point));
+                    } 
                 }
                 false
             }

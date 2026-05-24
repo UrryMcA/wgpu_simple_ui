@@ -10,8 +10,6 @@ pub mod ui;
 pub mod drag_drop_manager;
 pub mod ui_manager;
 
-// Реэкспорты
-
 pub use primitives_impl::DefaultPrimitives;
 pub use texture_manager::TextureManager;
 pub use renderer::UiRenderer;
