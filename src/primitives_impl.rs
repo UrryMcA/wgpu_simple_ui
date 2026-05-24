@@ -529,103 +529,78 @@ fn rounded_rect_vertices_indices(&self, rect: Rect, radius: f32, color: UColor) 
 }
 
     fn rounded_textured_rect_vertices_indices(
-        &self, 
-        rect: Rect, 
-        radius: f32, 
-        tex_coords: TexCoords, 
-        tint: UColor
+        &self,
+        rect: Rect,
+        radius: f32,
+        tex_coords: TexCoords,
+        tint: UColor,
     ) -> (Vec<Vertex>, Vec<u32>) {
-        let x = rect.x; 
+        let x = rect.x;
         let y = rect.y;
-        // Защита от деления на ноль при нулевых размерах
-        let w = rect.w.max(1.0); 
+        let w = rect.w.max(1.0);
         let h = rect.h.max(1.0);
         let r = radius.min(w * 0.5).min(h * 0.5);
         let c = tint.0;
-        
-        // Предвычисляем шаги UV для билинейной интерполяции по bounding box
+
+        // Билинейная интерполяция UV
         let du = (tex_coords.u1 - tex_coords.u0) / w;
         let dv = (tex_coords.v1 - tex_coords.v0) / h;
 
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
-        // Центральная вершина (индекс 0)
-        let center_x = x + w * 0.5;
-        let center_y = y + h * 0.5;
-        let center_u = tex_coords.u0 + du * (w * 0.5);
-        let center_v = tex_coords.v0 + dv * (h * 0.5);
+        // Центр (индекс 0)
+        let cx = x + w * 0.5;
+        let cy = y + h * 0.5;
         vertices.push(Vertex {
-            position: [center_x, center_y],
-            tex_coord: [center_u, center_v],
+            position: [cx, cy],
+            tex_coord: [tex_coords.u0 + du * (w * 0.5), tex_coords.v0 + dv * (h * 0.5)],
             color: c,
         });
 
         let segments = 8;
         let angle_step = std::f32::consts::FRAC_PI_2 / segments as f32;
 
-        // Хелпер для добавления вершины с интерполированными UV
         let mut push_v = |px: f32, py: f32| {
-            let u = tex_coords.u0 + (px - x) * du;
-            let v = tex_coords.v0 + (py - y) * dv;
-            vertices.push(Vertex { position: [px, py], tex_coord: [u, v], color: c });
+            vertices.push(Vertex {
+                position: [px, py],
+                tex_coord: [tex_coords.u0 + (px - x) * du, tex_coords.v0 + (py - y) * dv],
+                color: c,
+            });
         };
 
-        // 1. Верхняя сторона (слева направо)
+        // Периметр по часовой стрелке
         push_v(x + r, y);
-
-        // 2. Верхний правый угол (270° → 360°)
-        let corner_cx = x + w - r;
-        let corner_cy = y + r;
         for i in 0..=segments {
-            let angle = -std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
-            push_v(corner_cx + r * angle.cos(), corner_cy + r * angle.sin());
+            let a = -std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
+            push_v(x + w - r + r * a.cos(), y + r + r * a.sin());
         }
-
-        // 3. Правая сторона (сверху вниз)
         push_v(x + w, y + h - r);
-
-        // 4. Нижний правый угол (0° → 90°)
-        let corner_cx = x + w - r;
-        let corner_cy = y + h - r;
         for i in 0..=segments {
-            let angle = angle_step * i as f32;
-            push_v(corner_cx + r * angle.cos(), corner_cy + r * angle.sin());
+            let a = angle_step * i as f32;
+            push_v(x + w - r + r * a.cos(), y + h - r + r * a.sin());
         }
-
-        // 5. Нижняя сторона (справа налево)
         push_v(x + r, y + h);
-
-        // 6. Нижний левый угол (90° → 180°)
-        let corner_cx = x + r;
-        let corner_cy = y + h - r;
         for i in 0..=segments {
-            let angle = std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
-            push_v(corner_cx + r * angle.cos(), corner_cy + r * angle.sin());
+            let a = std::f32::consts::FRAC_PI_2 + angle_step * i as f32;
+            push_v(x + r + r * a.cos(), y + h - r + r * a.sin());
         }
-
-        // 7. Левая сторона (снизу вверх)
         push_v(x, y + r);
-
-        // 8. Верхний левый угол (180° → 270°)
-        let corner_cx = x + r;
-        let corner_cy = y + r;
         for i in 0..=segments {
-            let angle = std::f32::consts::PI + angle_step * i as f32;
-            push_v(corner_cx + r * angle.cos(), corner_cy + r * angle.sin());
+            let a = std::f32::consts::PI + angle_step * i as f32;
+            push_v(x + r + r * a.cos(), y + r + r * a.sin());
         }
 
-        // Генерация индексов (triangle fan от центра)
-        let perimeter_count = vertices.len() as u32 - 1;
-        for i in 0..perimeter_count {
-            let current = i + 1;
-            let next = if i + 1 == perimeter_count { 1 } else { i + 2 };
+        // Triangle fan
+        let perim = vertices.len() as u32 - 1;
+        for i in 0..perim {
+            let cur = i + 1;
+            let next = if i + 1 == perim { 1 } else { i + 2 };
             indices.push(0);
-            indices.push(current);
+            indices.push(cur);
             indices.push(next);
         }
 
         (vertices, indices)
-    }
-    
+    }   
 }
