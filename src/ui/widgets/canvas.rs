@@ -3,10 +3,12 @@ use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::types::*;
 use crate::common::vertex::Vertex;
-use crate::common::Primitives;
+use crate::common::primitives::Primitives;
 use crate::common::event::{Event, KeyboardModifiers};
 use crate::common::key::Key;
 use crate::ui_manager::UiManager;
+use crate::texture_manager::SamplerKind;
+use crate::widgets::{LeafRenderObjectWidget, Widget};
 
 /// Примитив для отрисовки на Canvas
 pub enum CanvasItem {
@@ -64,7 +66,7 @@ impl Canvas {
     }
 }
 
-impl crate::ui::widget::Widget for Canvas {
+impl Widget for Canvas {
     fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size {
         Size::new(self.width, self.height)
     }
@@ -85,7 +87,7 @@ impl crate::ui::widget::Widget for Canvas {
     }
 }
 
-impl crate::ui::widget::LeafRenderObjectWidget for Canvas {}
+impl  LeafRenderObjectWidget for Canvas {}
 
 struct CanvasRenderObject {
     items: Vec<CanvasItem>,
@@ -125,7 +127,6 @@ impl CanvasRenderObject {
                 CanvasItem::Custom(f) => f(primitives),
             };
 
-            // Сшиваем индексы: сдвигаем на текущее количество вершин
             let base = self.cached_vertices.len() as u32;
             self.cached_vertices.extend(verts);
             self.cached_indices.extend(inds.into_iter().map(|i| i + base));
@@ -174,8 +175,8 @@ impl RenderBox for CanvasRenderObject {
             v.position[1] += self.position.y;
         }
 
-        // 🔥 ОДИН DrawCommand на весь canvas — все фигуры батчатся вместе
-        ctx.add_command(0, world_verts, self.cached_indices.clone());
+        // Canvas использует текстуру 0 (сплошные цвета) и сэмплер Clamp
+        ctx.add_command(0, SamplerKind::Clamp, world_verts, self.cached_indices.clone());
     }
 
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
@@ -189,7 +190,6 @@ impl RenderBox for CanvasRenderObject {
     fn handle_event(&mut self, event: &Event, _ui: &mut UiManager) -> bool {
         if let Event::Click(p) = event {
             if let Some(cb) = &mut self.on_click {
-                // Передаём координаты относительно canvas'а
                 let local = Point::new(p.x - self.position.x, p.y - self.position.y);
                 cb(local);
             }

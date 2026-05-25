@@ -1,3 +1,5 @@
+/*
+
 use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::types::*;
@@ -231,3 +233,4 @@ impl RenderBox for CanvasButtonRenderObject {
     fn widget_id(&self) -> Option<WidgetId> { None }
     fn margin(&self) -> EdgeInsets { EdgeInsets::default() }
 }
+    */

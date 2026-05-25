@@ -3,6 +3,7 @@ use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::RenderBox;
 use crate::common::render_context::RenderContext;
 use crate::common::{Primitives, Vertex, types::*};
+use crate::texture_manager::SamplerKind;
 
 pub struct Image {
     texture_id: u64,
@@ -90,7 +91,7 @@ impl RenderBox for ImageRenderObject {
         if self.dirty {
             self.rebuild_cache(ctx.primitives);
         }
-        ctx.add_command(self.texture_id, self.cached_vertices.clone(), self.cached_indices.clone());
+        ctx.add_command(self.texture_id, SamplerKind::Clamp, self.cached_vertices.clone(), self.cached_indices.clone());
     }
 
     fn children(&self) -> &[Box<dyn RenderBox>] { &[] }

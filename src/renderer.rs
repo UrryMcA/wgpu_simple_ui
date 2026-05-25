@@ -2,15 +2,13 @@
 use wgpu::{Device, Queue, TextureFormat, TextureView, CommandEncoder, 
     RenderPass, RenderPipeline, BindGroup};
 use wgpu::util::DeviceExt;
+use std::sync::Arc;
 
 use crate::common::types::{FontLoader, GlyphInfo, GpuBitmapFont, Size, TextureLoader};
 use crate::common::vertex::{Vertex, DrawCommand};
 use crate::common::primitives::Primitives;
-use crate::texture_manager::TextureManager;
+use crate::texture_manager::{TextureManager, SamplerKind};
 use crate::ui_manager::UiManager;
-
-// Алиас для сложного типа ключа группировки
-type DrawGroupKey = (u64, Option<(u32, u32, u32, u32)>);
 
 pub struct UiRenderer {
     device: Device,
@@ -116,10 +114,8 @@ impl UiRenderer {
                 })],
                 compilation_options: Default::default(),
             }),
-
-            //primitive: wgpu::PrimitiveState::default(),
             primitive: wgpu::PrimitiveState {
-                cull_mode: None, // Отключаем back-face culling для 2D UI
+                cull_mode: None,
                 ..wgpu::PrimitiveState::default()
             },            
             depth_stencil: None,
@@ -137,12 +133,13 @@ impl UiRenderer {
 
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("ui_index_buffer"),
-            size: (Self::MAX_VERTICES_PER_CHUNK * 2 * std::mem::size_of::<u32>()) as u64, // ~2 индекса на вершину
+            size: (Self::MAX_VERTICES_PER_CHUNK * 2 * std::mem::size_of::<u32>()) as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let texture_manager = TextureManager::new(device, queue, &texture_bind_group_layout);
+        let bind_group_layout = Arc::new(texture_bind_group_layout);
+        let texture_manager = TextureManager::new(device, queue, &bind_group_layout);
         let ui_manager = UiManager::new(
             Size::new(width as f32, height as f32),
             texture_manager,
@@ -161,7 +158,7 @@ impl UiRenderer {
             vertex_buffer,
             surface_width: width,
             surface_height: height,
-            index_buffer: index_buffer,
+            index_buffer,
         }
     }
 
@@ -239,8 +236,7 @@ impl UiRenderer {
     }
 
     pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView) {
-        //self.ui_manager.layout(Size::new(self.surface_width as f32, self.surface_height as f32));
-        self.ui_manager.render(&mut self.commands);
+        self.ui_manager.render(&mut self.commands, &self.device);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("UI Render Pass"),
@@ -248,13 +244,12 @@ impl UiRenderer {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-//                    load: wgpu::LoadOp::Load,
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                                        r: 0.1,
-                                        g: 0.2,
-                                        b: 0.3,
-                                        a: 1.0,
-                                    }),                    
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),                    
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -270,226 +265,128 @@ impl UiRenderer {
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
             self.execute_commands(&mut render_pass);
         }
-
-        //self.commands.clear();
     }
 
-    /// Выполняет сгруппированные draw call'ы с учётом scissor-прямоугольников.
-    /// 
-fn execute_commands(&mut self, render_pass: &mut RenderPass) {
-    type DrawGroupKey = (u64, Option<(u32, u32, u32, u32)>);
+    fn execute_commands(&mut self, render_pass: &mut RenderPass) {
+        type DrawGroupKey = (u64, SamplerKind, Option<(u32, u32, u32, u32)>);
 
-    // ✅ Adjacent batching: группы только для СОСЕДНИХ команд
-    let mut groups: Vec<(DrawGroupKey, (Vec<Vertex>, Vec<u32>))> = Vec::new();
-
-    for cmd in self.commands.drain(..) {
-        let key_scissor = cmd.scissor_rect.map(|rect| {
-            (
-                rect.x.max(0.0) as u32,
-                rect.y.max(0.0) as u32,
-                rect.w.max(0.0) as u32,
-                rect.h.max(0.0) as u32,
-            )
-        });
-        let key = (cmd.texture_id, key_scissor);
-        
-        let should_merge = groups.last()
-            .map(|(k, _)| *k == key)
-            .unwrap_or(false);
-        
-        if should_merge {
-            let group = &mut groups.last_mut().unwrap().1;
-            let base_vertex = group.0.len() as u32;
-            group.0.extend(cmd.vertices);
-            group.1.extend(cmd.indices.into_iter().map(|i| i + base_vertex));
-        } else {
-            let verts = cmd.vertices;
-            let indices = cmd.indices;
-            groups.push((key, (verts, indices)));
-        }
-    }
-
-    if groups.is_empty() {
-        return;
-    }
-
-    // 🔧 Хелпер для отправки чанка на GPU
-    let flush_chunk = |r_pass: &mut RenderPass,
-                       v_buf: &wgpu::Buffer,
-                       i_buf: &wgpu::Buffer,
-                       q: &wgpu::Queue,
-                       draws: &[(u64, Option<(u32, u32, u32, u32)>, u32, u32)],
-                       verts: &[Vertex],
-                       idxs: &[u32],
-                       tex_mgr: &crate::texture_manager::TextureManager,
-                       surf_w: u32,
-                       surf_h: u32| {
-        if verts.is_empty() { return; }
-
-        q.write_buffer(v_buf, 0, bytemuck::cast_slice(verts));
-        q.write_buffer(i_buf, 0, bytemuck::cast_slice(idxs));
-        
-        r_pass.set_vertex_buffer(0, v_buf.slice(..));
-        r_pass.set_index_buffer(i_buf.slice(..), wgpu::IndexFormat::Uint32);
-
-        for (tid, scissor_key, idx_start, idx_count) in draws {
-            let bg = if *tid == 0 {
-                tex_mgr.get_fallback_bind_group()
-            } else {
-                tex_mgr.get_bind_group(*tid)
-                    .unwrap_or_else(|| tex_mgr.get_fallback_bind_group())
-            };
-            r_pass.set_bind_group(1, bg, &[]);
-
-            // 🔧 FIX: Дереференс скиссора через &Some((x, y, w, h))
-            if let &Some((x, y, sw, sh)) = scissor_key {
-                // Clamp к размеру поверхности (защита от panic wgpu)
-                let x_clamped = x.min(surf_w);
-                let y_clamped = y.min(surf_h);
-                let w_clamped = sw.min(surf_w.saturating_sub(x));
-                let h_clamped = sh.min(surf_h.saturating_sub(y));
-                
-                if w_clamped > 0 && h_clamped > 0 {
-                    r_pass.set_scissor_rect(x_clamped, y_clamped, w_clamped, h_clamped);
-                } else {
-                    continue;
-                }
-            } else {
-                r_pass.set_scissor_rect(0, 0, surf_w, surf_h);
-            }
-
-            r_pass.draw_indexed(*idx_start..(*idx_start + *idx_count), 0, 0..1);
-        }
-    };
-
-    // 🔧 Чанковая сборка геометрии
-    let mut chunk_verts: Vec<Vertex> = Vec::with_capacity(Self::MAX_VERTICES_PER_CHUNK);
-    let mut chunk_idxs: Vec<u32> = Vec::with_capacity(Self::MAX_VERTICES_PER_CHUNK * 3 / 2);
-    let mut chunk_draws: Vec<(u64, Option<(u32, u32, u32, u32)>, u32, u32)> = Vec::new();
-
-    for ((tid, scissor_key), (g_v, g_i)) in groups {
-        // Если чанк + новая группа превышают лимит → сброс на GPU
-        if chunk_verts.len() + g_v.len() > Self::MAX_VERTICES_PER_CHUNK ||
-           chunk_idxs.len() + g_i.len() > chunk_idxs.capacity() {
-            
-            flush_chunk(
-                render_pass, 
-                &self.vertex_buffer, 
-                &self.index_buffer, 
-                &self.queue,
-                &chunk_draws, 
-                &chunk_verts, 
-                &chunk_idxs,
-                self.ui_manager.texture_manager(), 
-                self.surface_width, 
-                self.surface_height,
-            );
-            chunk_verts.clear();
-            chunk_idxs.clear();
-            chunk_draws.clear();
-        }
-
-        let base_v = chunk_verts.len() as u32;
-        chunk_verts.extend(g_v);
-        chunk_idxs.extend(g_i.iter().map(|idx| idx + base_v));
-        chunk_draws.push((tid, scissor_key, chunk_idxs.len() as u32 - g_i.len() as u32, g_i.len() as u32));
-    }
-
-    // 🔧 Сброс остатка
-    if !chunk_verts.is_empty() {
-        flush_chunk(
-            render_pass, 
-            &self.vertex_buffer, 
-            &self.index_buffer, 
-            &self.queue,
-            &chunk_draws, 
-            &chunk_verts, 
-            &chunk_idxs,
-            self.ui_manager.texture_manager(), 
-            self.surface_width, 
-            self.surface_height,
-        );
-    }
-}
-
-    fn execute_commands2(&mut self, render_pass: &mut RenderPass) {
-        type DrawGroupKey = (u64, Option<(u32, u32, u32, u32)>);
-        
-        // ✅ Adjacent batching: группы только для СОСЕДНИХ команд
-        // Используем Vec<(Key, Group)> вместо HashMap/IndexMap
         let mut groups: Vec<(DrawGroupKey, (Vec<Vertex>, Vec<u32>))> = Vec::new();
 
         for cmd in self.commands.drain(..) {
             let key_scissor = cmd.scissor_rect.map(|rect| {
-                (rect.x.max(0.0) as u32, rect.y.max(0.0) as u32,
-                rect.w.max(0.0) as u32, rect.h.max(0.0) as u32)
+                (
+                    rect.x.max(0.0) as u32,
+                    rect.y.max(0.0) as u32,
+                    rect.w.max(0.0) as u32,
+                    rect.h.max(0.0) as u32,
+                )
             });
-            let key = (cmd.texture_id, key_scissor);
-            
-            // Проверяем последнюю группу — если ключ совпадает, добавляем в неё
+            let key = (cmd.texture_id, cmd.sampler_kind, key_scissor);
             let should_merge = groups.last()
                 .map(|(k, _)| *k == key)
                 .unwrap_or(false);
-            
             if should_merge {
                 let group = &mut groups.last_mut().unwrap().1;
                 let base_vertex = group.0.len() as u32;
                 group.0.extend(cmd.vertices);
                 group.1.extend(cmd.indices.into_iter().map(|i| i + base_vertex));
             } else {
-                // Создаём новую группу (даже если такой ключ уже был раньше!)
-                let verts = cmd.vertices;
-                let indices = cmd.indices;
-                groups.push((key, (verts, indices)));
+                groups.push((key, (cmd.vertices, cmd.indices)));
             }
         }
 
-        // Второй цикл: слияние групп в общий буфер (порядок сохранён!)
-        let mut all_vertices: Vec<Vertex> = Vec::new();
-        let mut all_indices: Vec<u32> = Vec::new();
-        let mut draw_calls: Vec<(u64, Option<(u32, u32, u32, u32)>, u32, u32)> = Vec::new();
-
-        for ((tid, scissor_key), (verts, idxs)) in groups {
-            let base_vertex = all_vertices.len() as u32;
-            let idx_start = all_indices.len() as u32;
-            let idx_count = idxs.len() as u32;
-
-            all_vertices.extend(verts);
-            let adjusted_indices: Vec<u32> = idxs.into_iter().map(|i| i + base_vertex).collect();
-            all_indices.extend(adjusted_indices);
-            draw_calls.push((tid, scissor_key, idx_start, idx_count));
+        if groups.is_empty() {
+            return;
         }
 
-        if all_vertices.is_empty() { return; }
+        let flush_chunk = |r_pass: &mut RenderPass,
+                           v_buf: &wgpu::Buffer,
+                           i_buf: &wgpu::Buffer,
+                           q: &wgpu::Queue,
+                           draws: &[(u64, SamplerKind, Option<(u32, u32, u32, u32)>, u32, u32)],
+                           verts: &[Vertex],
+                           idxs: &[u32],
+                           tex_mgr: &mut TextureManager,
+                           device: &Device,
+                           surf_w: u32,
+                           surf_h: u32| {
+            if verts.is_empty() { return; }
+            q.write_buffer(v_buf, 0, bytemuck::cast_slice(verts));
+            q.write_buffer(i_buf, 0, bytemuck::cast_slice(idxs));
+            r_pass.set_vertex_buffer(0, v_buf.slice(..));
+            r_pass.set_index_buffer(i_buf.slice(..), wgpu::IndexFormat::Uint32);
 
-        self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
-        self.queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&all_indices));
-        
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            for (tid, sampler_kind, scissor_key, idx_start, idx_count) in draws {
+                let bind_group = if *tid == 0 {
+                    tex_mgr.get_fallback_bind_group(*sampler_kind)
+                } else {
+                    tex_mgr.get_bind_group(device, *tid, *sampler_kind)
+                };
+                r_pass.set_bind_group(1, bind_group, &[]);
 
-        let texture_manager = self.ui_manager.texture_manager();
-        for (tid, scissor_key, idx_start, idx_count) in draw_calls {
-            let bind_group = if tid == 0 {
-                texture_manager.get_fallback_bind_group()
-            } else {
-                texture_manager.get_bind_group(tid)
-                    .unwrap_or_else(|| texture_manager.get_fallback_bind_group())
-            };
-            render_pass.set_bind_group(1, bind_group, &[]);
-
-            if let Some((x, y, w, h)) = scissor_key {
-                if w > 0 && h > 0 {
-                    render_pass.set_scissor_rect(x, y, w, h);
-                } else { continue; }
-            } else {
-                render_pass.set_scissor_rect(0, 0, self.surface_width, self.surface_height);
+                if let &Some((x, y, sw, sh)) = scissor_key {
+                    let x_clamped = x.min(surf_w);
+                    let y_clamped = y.min(surf_h);
+                    let w_clamped = sw.min(surf_w.saturating_sub(x));
+                    let h_clamped = sh.min(surf_h.saturating_sub(y));
+                    if w_clamped > 0 && h_clamped > 0 {
+                        r_pass.set_scissor_rect(x_clamped, y_clamped, w_clamped, h_clamped);
+                    } else {
+                        continue;
+                    }
+                } else {
+                    r_pass.set_scissor_rect(0, 0, surf_w, surf_h);
+                }
+                r_pass.draw_indexed(*idx_start..(*idx_start + *idx_count), 0, 0..1);
             }
+        };
 
-            render_pass.draw_indexed(idx_start..(idx_start + idx_count), 0, 0..1);
+        let mut chunk_verts: Vec<Vertex> = Vec::with_capacity(Self::MAX_VERTICES_PER_CHUNK);
+        let mut chunk_idxs: Vec<u32> = Vec::with_capacity(Self::MAX_VERTICES_PER_CHUNK * 3 / 2);
+        let mut chunk_draws: Vec<(u64, SamplerKind, Option<(u32, u32, u32, u32)>, u32, u32)> = Vec::new();
+
+        for ((tid, sampler_kind, scissor_key), (g_v, g_i)) in groups {
+            if chunk_verts.len() + g_v.len() > Self::MAX_VERTICES_PER_CHUNK ||
+               chunk_idxs.len() + g_i.len() > chunk_idxs.capacity() {
+                flush_chunk(
+                    render_pass,
+                    &self.vertex_buffer,
+                    &self.index_buffer,
+                    &self.queue,
+                    &chunk_draws,
+                    &chunk_verts,
+                    &chunk_idxs,
+                    self.ui_manager.texture_manager_mut(),
+                    &self.device,
+                    self.surface_width,
+                    self.surface_height,
+                );
+                chunk_verts.clear();
+                chunk_idxs.clear();
+                chunk_draws.clear();
+            }
+            let base_v = chunk_verts.len() as u32;
+            chunk_verts.extend(g_v);
+            chunk_idxs.extend(g_i.iter().map(|idx| idx + base_v));
+            chunk_draws.push((tid, sampler_kind, scissor_key, chunk_idxs.len() as u32 - g_i.len() as u32, g_i.len() as u32));
+        }
+
+        if !chunk_verts.is_empty() {
+            flush_chunk(
+                render_pass,
+                &self.vertex_buffer,
+                &self.index_buffer,
+                &self.queue,
+                &chunk_draws,
+                &chunk_verts,
+                &chunk_idxs,
+                self.ui_manager.texture_manager_mut(),
+                &self.device,
+                self.surface_width,
+                self.surface_height,
+            );
         }
     }
-
 }
 
 #[repr(C)]

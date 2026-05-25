@@ -1,12 +1,14 @@
+// src/ui/widgets/panel.rs
 use super::widget::Widget;
 use crate::common::render_box::RenderBox;
 use crate::common::render_context::RenderContext;
 use crate::common::primitives::Primitives;
-use crate::common::{Vertex, types::*};
+use crate::common::types::*;
+use crate::common::vertex::Vertex;
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
 use crate::ui_manager::UiManager;
-use crate::texture_manager::TextureManager;
+use crate::texture_manager::{TextureManager, SamplerKind};
 
 pub struct Panel {
     child: Box<dyn Widget>,
@@ -39,8 +41,6 @@ impl Panel {
     pub fn margin(mut self, margin: EdgeInsets) -> Self { self.margin = margin; self }
     pub fn padding(mut self, padding: EdgeInsets) -> Self { self.padding = padding; self }
 
-    /// Добавляет PNG-оверлей поверх залитого фона.
-    /// `tint` управляет яркостью и прозрачностью текстуры.
     pub fn background_texture_overlay(mut self, id: u64, fit: BackgroundFit, tint: Option<UColor>) -> Self {
         self.overlay_texture_id = Some(id);
         self.overlay_fit = fit;
@@ -175,15 +175,29 @@ impl RenderBox for PanelRenderObject {
             self.rebuild_cache(ctx.primitives, ctx.textures);
         }
 
-        // 🎨 Сначала заливаем цвет фона
+        // 🎨 Сначала заливаем цвет фона (текстура 0, сэмплер Clamp)
         if !self.cached_bg_vertices.is_empty() {
-            ctx.add_command(0, self.cached_bg_vertices.clone(), self.cached_bg_indices.clone());
+            let mut world_bg = self.cached_bg_vertices.clone();
+            for v in &mut world_bg {
+                v.position[0] += self.position.x;
+                v.position[1] += self.position.y;
+            }
+            ctx.add_command(0, SamplerKind::Clamp, world_bg, self.cached_bg_indices.clone());
         }
 
-        // 🖼️ Затем накладываем PNG-оверлей (альфа-блендинг включён в pipeline)
+        // 🖼️ Затем накладываем PNG-оверлей (с выбором сэмплера в зависимости от fit)
         if !self.cached_overlay_vertices.is_empty() {
             if let Some(oid) = self.overlay_texture_id {
-                ctx.add_command(oid, self.cached_overlay_vertices.clone(), self.cached_overlay_indices.clone());
+                let sampler_kind = match self.overlay_fit {
+                    BackgroundFit::Tile { .. } => SamplerKind::Repeat,
+                    _ => SamplerKind::Clamp,
+                };
+                let mut world_overlay = self.cached_overlay_vertices.clone();
+                for v in &mut world_overlay {
+                    v.position[0] += self.position.x;
+                    v.position[1] += self.position.y;
+                }
+                ctx.add_command(oid, sampler_kind, world_overlay, self.cached_overlay_indices.clone());
             }
         }
 

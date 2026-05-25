@@ -9,6 +9,7 @@ use crate::common::render_context::RenderContext;
 use crate::texture_manager::TextureManager;
 use crate::font_system::FontSystem;
 use crate::drag_drop_manager::DragDropManager;
+use wgpu::Device;
 use std::mem;
 
 pub struct UiManager {
@@ -54,13 +55,14 @@ impl UiManager {
         }
     }
 
-    pub fn render(&mut self, commands: &mut Vec<DrawCommand>) {
+    pub fn render(&mut self, commands: &mut Vec<DrawCommand>, device: &Device) {
         if let Some(mut root) = self.root.take() {
             let mut ctx = RenderContext::new(
                 commands,
                 self.primitives.as_ref(),
-                &self.texture_manager,
-                &self.font_system,   // изменяемая ссылка
+                &mut self.texture_manager,
+                &self.font_system,
+                device,
             );
             root.render(&mut ctx);
             self.root = Some(root);
@@ -146,7 +148,7 @@ impl UiManager {
         false
     }
 
-    // ---------- Фокус (без изменений) ----------
+    // ---------- Фокус ----------
     fn set_focus_to_widget(&mut self, id: WidgetId) -> bool {
         if self.focused_widget_id == Some(id) {
             return false;
@@ -289,8 +291,8 @@ impl UiManager {
                     }
                 } else {
                     if let Some(widget_id) = self.hit_test(*point) {
-                        self.send_event_to_widget(widget_id, &&Event::PointerDown( *point));
-                    } 
+                        self.send_event_to_widget(widget_id, &Event::PointerDown(*point));
+                    }
                 }
                 false
             }

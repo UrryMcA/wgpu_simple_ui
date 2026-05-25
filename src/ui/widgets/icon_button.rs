@@ -6,7 +6,7 @@ use crate::common::{Primitives, Vertex, types::*};
 use crate::common::event::{Event, KeyboardModifiers, DragData};
 use crate::common::key::Key;
 use crate::ui_manager::UiManager;
-use crate::texture_manager::TextureManager;
+use crate::texture_manager::{SamplerKind, TextureManager};
 
 pub struct IconButton {
     text: String,
@@ -190,14 +190,21 @@ impl RenderBox for IconButtonRenderObject {
         // 🎨 Слой 1: Solid Background
         let mut bg = self.cached_bg_vertices.clone();
         for v in &mut bg { v.position[0] += px; v.position[1] += py; }
-        if !bg.is_empty() { ctx.add_command(0, bg, self.cached_bg_indices.clone()); }
+        if !bg.is_empty() { 
+            ctx.add_command(0, SamplerKind::Clamp, bg, self.cached_bg_indices.clone()); 
+        }
 
         // 🖼️ Слой 2: Transparent PNG Overlay (рисуется ПОВЕРХ фона)
         let mut overlay = self.cached_overlay_vertices.clone();
         for v in &mut overlay { v.position[0] += px; v.position[1] += py; }
         if !overlay.is_empty() {
             if let Some(oid) = self.overlay_texture_id {
-                ctx.add_command(oid, overlay, self.cached_overlay_indices.clone());
+                // фон (текстура 0, Clamp)
+                let sampler_kind = match self.overlay_fit {
+                BackgroundFit::Tile { .. } => SamplerKind::Repeat,
+                    _ => SamplerKind::Clamp,
+                };
+                ctx.add_command(oid, sampler_kind, overlay, self.cached_overlay_indices.clone());
             }
         }
 
@@ -208,7 +215,7 @@ impl RenderBox for IconButtonRenderObject {
         let (icon_verts, icon_inds) = ctx.primitives.textured_rect_vertices_indices(
             icon_rect, TexCoords::new(0.0, 0.0, 1.0, 1.0), UColor([1.0, 1.0, 1.0, 1.0])
         );
-        ctx.add_command(self.icon_texture_id, icon_verts, icon_inds);
+        ctx.add_command(self.icon_texture_id, SamplerKind::Clamp, icon_verts, icon_inds);
 
         // 📝 Слой 4: Текст
         if let Some(font) = ctx.font_system.get_font(&self.font_name) {
@@ -217,7 +224,7 @@ impl RenderBox for IconButtonRenderObject {
             let (verts, inds) = ctx.font_system.generate_text_vertices_with_font(
                 font, &self.text, text_x, text_y, 16.0, UColor([1.0, 1.0, 1.0, 1.0]), ctx.primitives,
             );
-            ctx.add_command(font.texture_id(), verts, inds);
+            ctx.add_command(font.texture_id(), SamplerKind::Clamp, verts, inds);
         }
     }
 

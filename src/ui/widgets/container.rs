@@ -9,6 +9,7 @@ use crate::common::layout_strategy::*;
 use crate::layout::grid::GridLayout;
 use crate::layout::horizontal::HorizontalLayout;
 use crate::layout::vertical::VerticalLayout;
+use crate::texture_manager::SamplerKind;
 use crate::ui_manager::UiManager;
 
 pub struct Container {
@@ -183,7 +184,7 @@ impl RenderBox for ContainerRenderObject {
             self.rebuild_cache(ctx.primitives);
         }
         if !self.cached_vertices.is_empty() {
-            ctx.add_command(0, self.cached_vertices.clone(), self.cached_indices.clone());
+            ctx.add_command(0, SamplerKind::Clamp, self.cached_vertices.clone(), self.cached_indices.clone());
         }
         for child in &mut self.children {
             child.render(ctx);

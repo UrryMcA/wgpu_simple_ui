@@ -3,6 +3,7 @@ use super::widget::{Widget, LeafRenderObjectWidget};
 use crate::common::render_box::RenderBox;
 use crate::common::render_context::RenderContext;
 use crate::common::{Vertex, types::*};
+use crate::texture_manager::SamplerKind;
 
 pub struct Label {
     text: String,
@@ -117,11 +118,9 @@ impl RenderBox for LabelRenderObject {
             self.rebuild_cache(ctx);
         }
         if !self.cached_vertices.is_empty() {
-            ctx.add_command(
-                ctx.font_system.get_font(&self.font_name).map(|f| f.texture_id()).unwrap_or(0),
-                self.cached_vertices.clone(),
-                self.cached_indices.clone(),
-            );
+            // в методе render, внутри add_command
+            let texture_id = ctx.font_system.get_font(&self.font_name).map(|f| f.texture_id()).unwrap_or(0);
+            ctx.add_command(texture_id, SamplerKind::Clamp, self.cached_vertices.clone(), self.cached_indices.clone());
         }
     }
 

@@ -5,6 +5,7 @@ use crate::common::render_context::RenderContext;
 use crate::common::{Primitives, Vertex, types::*};
 use crate::common::event::{Event, KeyboardModifiers};
 use crate::common::key::Key;
+use crate::texture_manager::SamplerKind;
 use crate::ui_manager::UiManager;
 
 pub struct OutlineRect {
@@ -155,7 +156,7 @@ impl RenderBox for OutlineRectRenderObject {
             v.position[1] += self.position.y;
         }
 
-        ctx.add_command(0, world_verts, self.cached_indices.clone());
+        ctx.add_command(0, SamplerKind::Clamp, world_verts, self.cached_indices.clone());
     }
 
     fn children(&self) -> &[Box<dyn RenderBox>] {

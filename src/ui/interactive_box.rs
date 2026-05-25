@@ -4,8 +4,8 @@ use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::types::{Constraints, EdgeInsets, LayoutContext, Point, Rect, Size};
 use crate::ui::interactive_state::InteractiveState;
-use crate::ui::widget::Widget;
 use crate::ui_manager::UiManager;
+use crate::widgets::Widget;
 
 /// Виджет-обёртка, добавляющий интерактивность (hover, click, drag, focus) любому другому виджету.
 /// Не изменяет внешний вид автоматически, но предоставляет состояние, которое можно использовать

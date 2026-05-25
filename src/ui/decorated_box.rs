@@ -1,42 +1,36 @@
-// src/ui/decorated_box.rs
 use crate::common::primitives::Primitives;
 use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::types::*;
 use crate::common::vertex::Vertex;
-use crate::texture_manager::TextureManager;
+use crate::common::event::{Event, DragData};
+use crate::texture_manager::{TextureManager, SamplerKind};
 use crate::ui_manager::UiManager;
+use crate::widgets::Widget;
 use crate::widgets::canvas::CanvasItem;
-use crate::widgets::*;
 
 /// Тип фона для DecoratedBox
 pub enum Background {
-    /// Заливка сплошным цветом
     Solid(UColor),
-    /// Изображение (текстура) с заданным способом вписывания и оттенком
     Image {
         texture_id: u64,
         fit: BackgroundFit,
         tint: UColor,
     },
-    /// Набор примитивов Canvas (рисуется как единое целое)
     Canvas(Vec<CanvasItem>),
 }
 
-impl Background {
-    /// Создать сплошной цвет (белый)
-    pub fn white() -> Self {
+impl Default for Background {
+    fn default() -> Self {
         Background::Solid(UColor::new(1.0, 1.0, 1.0, 1.0))
     }
 }
 
-/// Виджет, который декорирует своего единственного ребёнка фоном, обводкой и скруглениями.
-/// Не содержит интерактивной логики (hover, click и т.д.).
 pub struct DecoratedBox {
     child: Box<dyn Widget>,
     background: Background,
     corner_radius: f32,
-    border: Option<(f32, UColor)>, // толщина, цвет
+    border: Option<(f32, UColor)>,
     margin: EdgeInsets,
     padding: EdgeInsets,
 }
@@ -45,7 +39,7 @@ impl DecoratedBox {
     pub fn new(child: Box<dyn Widget>) -> Self {
         Self {
             child,
-            background: Background::white(),
+            background: Background::default(),
             corner_radius: 0.0,
             border: None,
             margin: EdgeInsets::default(),
@@ -141,9 +135,7 @@ impl DecoratedBoxRenderObject {
             self.bg_indices.clear();
             return;
         }
-
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
-
         match &self.background {
             Background::Solid(color) => {
                 let (v, i) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, *color);
@@ -157,8 +149,7 @@ impl DecoratedBoxRenderObject {
                     self.bg_vertices = v;
                     self.bg_indices = i;
                 } else {
-                    // fallback: белый цвет
-                    let (v, i) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, UColor::new(1.0,1.0,1.0,1.0));
+                    let (v, i) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, UColor::new(1.0, 1.0, 1.0, 1.0));
                     self.bg_vertices = v;
                     self.bg_indices = i;
                 }
@@ -168,12 +159,12 @@ impl DecoratedBoxRenderObject {
                 let mut tmp_inds = Vec::new();
                 for item in items {
                     let (verts, inds) = match item {
-                        CanvasItem::Rect { rect, color } => primitives.rect_vertices_indices(rect, color),
-                        CanvasItem::RoundedRect { rect, radius, color } => primitives.rounded_rect_vertices_indices(rect, radius, color),
-                        CanvasItem::OutlineRect { rect, radius, thickness, color } => primitives.rounded_rect_outline_vertices_indices(rect, radius, thickness, color),
-                        CanvasItem::Line { line, color } => primitives.line_vertices_indices(line, color),
-                        CanvasItem::Arc { arc, color } => primitives.arc_vertices_indices(arc, color),
-                        CanvasItem::FilledSector { sector, color } => primitives.filled_arc_sector_vertices_indices(sector, color),
+                        CanvasItem::Rect { rect, color } => primitives.rect_vertices_indices(*rect, *color),
+                        CanvasItem::RoundedRect { rect, radius, color } => primitives.rounded_rect_vertices_indices(*rect, *radius, *color),
+                        CanvasItem::OutlineRect { rect, radius, thickness, color } => primitives.rounded_rect_outline_vertices_indices(*rect, *radius, *thickness, *color),
+                        CanvasItem::Line { line, color } => primitives.line_vertices_indices(*line, *color),
+                        CanvasItem::Arc { arc, color } => primitives.arc_vertices_indices(*arc, *color),
+                        CanvasItem::FilledSector { sector, color } => primitives.filled_arc_sector_vertices_indices(*sector, *color),
                         CanvasItem::Custom(f) => f(primitives),
                     };
                     let base = tmp_verts.len() as u32;
@@ -209,7 +200,6 @@ impl DecoratedBoxRenderObject {
 
 impl RenderBox for DecoratedBoxRenderObject {
     fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size {
-        // Вычитаем margin и padding для child
         let child_constraints = Constraints {
             min_width: (constraints.min_width - self.margin.left - self.margin.right - self.padding.left - self.padding.right).max(0.0),
             max_width: (constraints.max_width - self.margin.left - self.margin.right - self.padding.left - self.padding.right).max(0.0),
@@ -232,7 +222,6 @@ impl RenderBox for DecoratedBoxRenderObject {
     fn set_position(&mut self, pos: Point) {
         if self.position != pos {
             self.position = pos;
-            // Позиция ребёнка: позиция родителя + margin + padding
             let child_pos = Point::new(
                 pos.x + self.margin.left + self.padding.left,
                 pos.y + self.margin.top + self.padding.top,
@@ -262,11 +251,19 @@ impl RenderBox for DecoratedBoxRenderObject {
                 v.position[0] += self.position.x;
                 v.position[1] += self.position.y;
             }
-            let texture_id = match &self.background {
-                Background::Image { texture_id, .. } => *texture_id,
-                _ => 0,
+
+            let (texture_id, sampler_kind) = match &self.background {
+                Background::Image { texture_id, fit, .. } => {
+                    let sk = match fit {
+                        BackgroundFit::Tile { .. } => SamplerKind::Repeat,
+                        _ => SamplerKind::Clamp,
+                    };
+                    (*texture_id, sk)
+                }
+                Background::Solid(_) => (0, SamplerKind::Clamp),
+                Background::Canvas(_) => (0, SamplerKind::Clamp),
             };
-            ctx.add_command(texture_id, world_verts, self.bg_indices.clone());
+            ctx.add_command(texture_id, sampler_kind, world_verts, self.bg_indices.clone());
         }
 
         // Рисуем обводку
@@ -276,10 +273,9 @@ impl RenderBox for DecoratedBoxRenderObject {
                 v.position[0] += self.position.x;
                 v.position[1] += self.position.y;
             }
-            ctx.add_command(0, world_verts, self.border_indices.clone());
+            ctx.add_command(0, SamplerKind::Clamp, world_verts, self.border_indices.clone());
         }
 
-        // Рисуем ребёнка
         self.child.render(ctx);
     }
 
@@ -292,12 +288,10 @@ impl RenderBox for DecoratedBoxRenderObject {
     }
 
     fn hit_test(&self, point: Point) -> bool {
-        let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
-        rect.contains(point)
+        Rect::new(self.position.x, self.position.y, self.size.width, self.size.height).contains(point)
     }
 
     fn handle_event(&mut self, event: &Event, ui: &mut UiManager) -> bool {
-        // Просто передаём событие ребёнку, предварительно проверив hit test
         if let Some(point) = event.point() {
             if self.child.hit_test(point) {
                 return self.child.handle_event(event, ui);

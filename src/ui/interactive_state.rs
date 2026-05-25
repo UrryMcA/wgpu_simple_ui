@@ -5,7 +5,6 @@ use crate::common::types::{Point, Rect};
 use crate::ui_manager::UiManager;
 
 /// Состояния интерактивного элемента (кнопки, перетаскиваемого виджета и т.д.)
-#[derive(Debug, Clone)]
 pub struct InteractiveState {
     /// Наведён ли курсор на область виджета
     pub hovered: bool,
@@ -46,7 +45,7 @@ impl InteractiveState {
     /// Обработать событие, обновляя состояния и вызывая колбэки.
     /// Возвращает `true`, если событие было поглощено (обработано).
     /// `widget_rect` – область виджета в абсолютных координатах (используется для hit test).
-    /// `ui_manager` – нужен для отправки событий drag & drop (может быть использован для вызова `start_drag` и т.д., но здесь не используется напрямую, только для передачи в колбэки).
+    /// `ui_manager` – нужен для отправки событий drag & drop (может быть использован для вызова start_drag и т.д.)
     pub fn handle_event(
         &mut self,
         event: &Event,
@@ -58,16 +57,13 @@ impl InteractiveState {
                 let inside = widget_rect.contains(*point);
                 if inside != self.hovered {
                     self.hovered = inside;
-                    // Здесь можно отправить уведомление об изменении ховера (если нужно)
                 }
-                // Поглощаем событие, только если мы в режиме перетаскивания? Нет, просто обновляем состояние.
-                // Возвращаем false, чтобы событие могло дальше распространяться (например, дети тоже могут реагировать).
                 false
             }
             Event::PointerDown(point) => {
                 if widget_rect.contains(*point) {
                     self.pressed = true;
-                    true // Поглотили
+                    true
                 } else {
                     false
                 }
@@ -76,7 +72,6 @@ impl InteractiveState {
                 let was_pressed = self.pressed;
                 self.pressed = false;
                 if was_pressed && widget_rect.contains(*point) {
-                    // Клик: вызываем колбэк
                     if let Some(cb) = &mut self.on_click {
                         cb();
                     }
@@ -110,8 +105,6 @@ impl InteractiveState {
                     false
                 }
             }
-            // Drag & Drop события обрабатываются отдельно (обычно в UiManager через DragDropManager).
-            // Здесь мы только обновляем состояние dragging по событиям от UiManager.
             Event::DragStart { .. } => {
                 self.dragging = true;
                 true
@@ -124,7 +117,7 @@ impl InteractiveState {
         }
     }
 
-    /// Сбросить все интерактивные состояния (например, при потере фокуса или принудительно)
+    /// Сбросить все интерактивные состояния (например, при потере фокуса)
     pub fn reset(&mut self) {
         self.hovered = false;
         self.pressed = false;
