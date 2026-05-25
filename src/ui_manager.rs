@@ -44,6 +44,7 @@ impl UiManager {
 
     pub fn set_root(&mut self, root: Box<dyn RenderBox>) {
         self.root = Some(root);
+        self.layout(self.screen_size);
     }
 
     pub fn layout(&mut self, screen_size: Size) {
