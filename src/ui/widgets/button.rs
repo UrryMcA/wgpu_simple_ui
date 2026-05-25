@@ -27,7 +27,7 @@ impl Button {
     pub fn new(child: impl Widget + 'static) -> Self {
         Self {
             child: Some(Box::new(child)),
-            background: Some(Background::Solid(UColor::new(0.2, 0.3, 0.5, 1.0))),
+            background: None,
             corner_radius: 0.0,
             border: None,
             margin: EdgeInsets::default(),
@@ -57,24 +57,42 @@ impl Button {
         Self::new(container)
     }
 
-    // ---------- Настройка фона ----------
+    // ---------- Настройка фона (поддержка композиции) ----------
+    fn merge_background(&mut self, new_bg: Background) {
+        match self.background.take() {
+            None => self.background = Some(new_bg),
+            Some(existing) => {
+                // Если уже есть композит, добавляем в него; иначе создаём новый композит.
+                match existing {
+                    Background::Composite(mut layers) => {
+                        layers.push(new_bg);
+                        self.background = Some(Background::Composite(layers));
+                    }
+                    other => {
+                        self.background = Some(Background::Composite(vec![other, new_bg]));
+                    }
+                }
+            }
+        }
+    }
+
     pub fn background(mut self, bg: Background) -> Self {
-        self.background = Some(bg);
+        self.merge_background(bg);
         self
     }
 
     pub fn solid_color(mut self, color: UColor) -> Self {
-        self.background = Some(Background::Solid(color));
+        self.merge_background(Background::Solid(color));
         self
     }
 
     pub fn image(mut self, texture_id: u64, fit: BackgroundFit, tint: UColor) -> Self {
-        self.background = Some(Background::Image { texture_id, fit, tint });
+        self.merge_background(Background::Image { texture_id, fit, tint });
         self
     }
 
     pub fn canvas(mut self, items: Vec<CanvasItem>) -> Self {
-        self.background = Some(Background::Canvas(items));
+        self.merge_background(Background::Canvas(items));
         self
     }
 
@@ -131,7 +149,7 @@ impl Widget for Button {
 
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let child = self.child.take().expect("Button child already taken");
-        let background = self.background.take().expect("Button background already taken");
+        let background = self.background.take().unwrap_or_else(|| Background::default());
 
         let mut decorated = DecoratedBox::new(child)
             .background(background)

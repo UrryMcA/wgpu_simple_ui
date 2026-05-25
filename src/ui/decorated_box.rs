@@ -5,6 +5,7 @@ use crate::common::types::*;
 use crate::common::vertex::Vertex;
 use crate::common::event::{Event, DragData};
 use crate::texture_manager::{TextureManager, SamplerKind};
+
 use crate::ui_manager::UiManager;
 use crate::widgets::Widget;
 use crate::widgets::canvas::CanvasItem;
@@ -18,6 +19,8 @@ pub enum Background {
         tint: UColor,
     },
     Canvas(Vec<CanvasItem>),
+    /// Несколько слоёв фона, которые будут рисоваться последовательно (сначала первый, потом второй и т.д.)
+    Composite(Vec<Background>),
 }
 
 impl Default for Background {
@@ -93,8 +96,7 @@ impl Widget for DecoratedBox {
             padding: self.padding,
             position: Point::default(),
             size: Size::default(),
-            bg_vertices: Vec::new(),
-            bg_indices: Vec::new(),
+            bg_layers: Vec::new(),
             border_vertices: Vec::new(),
             border_indices: Vec::new(),
             dirty: true,
@@ -117,8 +119,8 @@ struct DecoratedBoxRenderObject {
     padding: EdgeInsets,
     position: Point,
     size: Size,
-    bg_vertices: Vec<Vertex>,
-    bg_indices: Vec<u32>,
+    /// Список слоёв: (texture_id, sampler_kind, vertices, indices)
+    bg_layers: Vec<(u64, SamplerKind, Vec<Vertex>, Vec<u32>)>,
     border_vertices: Vec<Vertex>,
     border_indices: Vec<u32>,
     dirty: bool,
@@ -129,29 +131,45 @@ impl DecoratedBoxRenderObject {
         self.dirty = true;
     }
 
-    fn rebuild_background_cache(&mut self, primitives: &dyn Primitives, textures: &TextureManager) {
-        if self.size.width <= 0.0 || self.size.height <= 0.0 {
-            self.bg_vertices.clear();
-            self.bg_indices.clear();
-            return;
-        }
-        let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
-        match &self.background {
+    /// Вспомогательная функция: создаёт слой фона для заданного `Background` (не `Composite`).
+    /// Возвращает `Some((texture_id, sampler_kind, vertices, indices))` или `None`.
+    fn create_background_layer(
+        bg: &Background,
+        corner_radius: f32,
+        primitives: &dyn Primitives,
+        textures: &TextureManager,
+        rect: Rect,
+    ) -> Option<(u64, SamplerKind, Vec<Vertex>, Vec<u32>)> {
+        match bg {
             Background::Solid(color) => {
-                let (v, i) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, *color);
-                self.bg_vertices = v;
-                self.bg_indices = i;
+                let (v, i) = primitives.rounded_rect_vertices_indices(rect, corner_radius, *color);
+                if v.is_empty() {
+                    None
+                } else {
+                    Some((0, SamplerKind::Clamp, v, i))
+                }
             }
             Background::Image { texture_id, fit, tint } => {
                 if let Some(tex_size) = textures.get_size_by_id(*texture_id) {
                     let tex_coords = fit.calculate_tex_coords(&rect, tex_size);
-                    let (v, i) = primitives.rounded_textured_rect_vertices_indices(rect, self.corner_radius, tex_coords, *tint);
-                    self.bg_vertices = v;
-                    self.bg_indices = i;
+                    let (v, i) = primitives.rounded_textured_rect_vertices_indices(rect, corner_radius, tex_coords, *tint);
+                    let sampler_kind = match fit {
+                        BackgroundFit::Tile { .. } => SamplerKind::Repeat,
+                        _ => SamplerKind::Clamp,
+                    };
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some((*texture_id, sampler_kind, v, i))
+                    }
                 } else {
-                    let (v, i) = primitives.rounded_rect_vertices_indices(rect, self.corner_radius, UColor::new(1.0, 1.0, 1.0, 1.0));
-                    self.bg_vertices = v;
-                    self.bg_indices = i;
+                    // fallback: белый цвет
+                    let (v, i) = primitives.rounded_rect_vertices_indices(rect, corner_radius, UColor::new(1.0, 1.0, 1.0, 1.0));
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some((0, SamplerKind::Clamp, v, i))
+                    }
                 }
             }
             Background::Canvas(items) => {
@@ -171,8 +189,39 @@ impl DecoratedBoxRenderObject {
                     tmp_verts.extend(verts);
                     tmp_inds.extend(inds.into_iter().map(|i| i + base));
                 }
-                self.bg_vertices = tmp_verts;
-                self.bg_indices = tmp_inds;
+                if tmp_verts.is_empty() {
+                    None
+                } else {
+                    Some((0, SamplerKind::Clamp, tmp_verts, tmp_inds))
+                }
+            }
+            Background::Composite(_) => {
+                // Не должен попадать сюда – обрабатывается на верхнем уровне.
+                None
+            }
+        }
+    }
+
+    fn rebuild_background_cache(&mut self, primitives: &dyn Primitives, textures: &TextureManager) {
+        if self.size.width <= 0.0 || self.size.height <= 0.0 {
+            self.bg_layers.clear();
+            return;
+        }
+        let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
+
+        self.bg_layers.clear();
+        match &self.background {
+            Background::Composite(layers) => {
+                for layer in layers {
+                    if let Some(layer_data) = Self::create_background_layer(layer, self.corner_radius, primitives, textures, rect) {
+                        self.bg_layers.push(layer_data);
+                    }
+                }
+            }
+            _ => {
+                if let Some(layer_data) = Self::create_background_layer(&self.background, self.corner_radius, primitives, textures, rect) {
+                    self.bg_layers.push(layer_data);
+                }
             }
         }
     }
@@ -244,26 +293,17 @@ impl RenderBox for DecoratedBoxRenderObject {
             self.rebuild_cache(ctx.primitives, ctx.textures);
         }
 
-        // Рисуем фон
-        if !self.bg_vertices.is_empty() {
-            let mut world_verts = self.bg_vertices.clone();
+        // Рисуем все слои фона (каждый со своей текстурой и сэмплером)
+        for (texture_id, sampler_kind, vertices, indices) in &self.bg_layers {
+            if vertices.is_empty() {
+                continue;
+            }
+            let mut world_verts = vertices.clone();
             for v in &mut world_verts {
                 v.position[0] += self.position.x;
                 v.position[1] += self.position.y;
             }
-
-            let (texture_id, sampler_kind) = match &self.background {
-                Background::Image { texture_id, fit, .. } => {
-                    let sk = match fit {
-                        BackgroundFit::Tile { .. } => SamplerKind::Repeat,
-                        _ => SamplerKind::Clamp,
-                    };
-                    (*texture_id, sk)
-                }
-                Background::Solid(_) => (0, SamplerKind::Clamp),
-                Background::Canvas(_) => (0, SamplerKind::Clamp),
-            };
-            ctx.add_command(texture_id, sampler_kind, world_verts, self.bg_indices.clone());
+            ctx.add_command(*texture_id, *sampler_kind, world_verts, indices.clone());
         }
 
         // Рисуем обводку
