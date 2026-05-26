@@ -5,6 +5,7 @@ use crate::common::types::*;
 use crate::common::vertex::Vertex;
 use crate::common::event::{Event, DragData};
 use crate::texture_manager::{TextureManager, SamplerKind};
+use crate::ui::interactive_state::InteractiveState;
 
 use crate::ui_manager::UiManager;
 use crate::widgets::Widget;
@@ -115,6 +116,12 @@ impl Widget for DecoratedBox {
             border_indices: Vec::new(),
             dirty: true,
             id: self.id,
+            hovered: false,
+            pressed: false,
+            focused: false,
+            dragging: false,
+            drag_is_source: false,
+            drag_is_target: false,
         };
         Box::new(ro)
     }
@@ -140,6 +147,13 @@ struct DecoratedBoxRenderObject {
     border_indices: Vec<u32>,
     dirty: bool,
     id: Option<WidgetId>,
+    // Состояния
+    hovered: bool,
+    pressed: bool,
+    focused: bool,
+    dragging: bool,
+    drag_is_source: bool,
+    drag_is_target: bool,
 }
 
 impl DecoratedBoxRenderObject {
@@ -153,10 +167,22 @@ impl DecoratedBoxRenderObject {
         primitives: &dyn Primitives,
         textures: &TextureManager,
         rect: Rect,
+        hovered: bool,
+        pressed: bool,
+        drag_is_target: bool,
     ) -> Option<(u64, SamplerKind, Vec<Vertex>, Vec<u32>)> {
         match bg {
             Background::Solid(color) => {
-                let (v, i) = primitives.rounded_rect_vertices_indices(rect, corner_radius, *color);
+                let final_color = if drag_is_target {
+                    UColor::new(0.0, 1.0, 0.0, 1.0)
+                } else if pressed {
+                    UColor::new(0.5, 0.2, 0.2, 1.0)
+                } else if hovered {
+                    UColor::new(0.3, 0.6, 0.9, 1.0)
+                } else {
+                    *color
+                };
+                let (v, i) = primitives.rounded_rect_vertices_indices(rect, corner_radius, final_color);
                 if v.is_empty() {
                     None
                 } else {
@@ -164,9 +190,18 @@ impl DecoratedBoxRenderObject {
                 }
             }
             Background::Image { texture_id, fit, tint } => {
+                let final_tint = if drag_is_target {
+                    UColor::new(0.0, 1.0, 0.0, 0.7)
+                } else if pressed {
+                    UColor::new(0.8, 0.3, 0.3, 0.7)
+                } else if hovered {
+                    UColor::new(0.4, 0.7, 1.0, 0.7)
+                } else {
+                    *tint
+                };
                 if let Some(tex_size) = textures.get_size_by_id(*texture_id) {
                     let tex_coords = fit.calculate_tex_coords(&rect, tex_size);
-                    let (v, i) = primitives.rounded_textured_rect_vertices_indices(rect, corner_radius, tex_coords, *tint);
+                    let (v, i) = primitives.rounded_textured_rect_vertices_indices(rect, corner_radius, tex_coords, final_tint);
                     let sampler_kind = match fit {
                         BackgroundFit::Tile { .. } => SamplerKind::Repeat,
                         _ => SamplerKind::Clamp,
@@ -223,13 +258,31 @@ impl DecoratedBoxRenderObject {
         match &self.background {
             Background::Composite(layers) => {
                 for layer in layers {
-                    if let Some(layer_data) = Self::create_background_layer(layer, self.corner_radius, primitives, textures, rect) {
+                    if let Some(layer_data) = Self::create_background_layer(
+                        layer,
+                        self.corner_radius,
+                        primitives,
+                        textures,
+                        rect,
+                        self.hovered,
+                        self.pressed,
+                        self.drag_is_target,
+                    ) {
                         self.bg_layers.push(layer_data);
                     }
                 }
             }
             _ => {
-                if let Some(layer_data) = Self::create_background_layer(&self.background, self.corner_radius, primitives, textures, rect) {
+                if let Some(layer_data) = Self::create_background_layer(
+                    &self.background,
+                    self.corner_radius,
+                    primitives,
+                    textures,
+                    rect,
+                    self.hovered,
+                    self.pressed,
+                    self.drag_is_target,
+                ) {
                     self.bg_layers.push(layer_data);
                 }
             }
@@ -254,6 +307,28 @@ impl DecoratedBoxRenderObject {
         self.rebuild_background_cache(primitives, textures);
         self.rebuild_border_cache(primitives);
         self.dirty = false;
+    }
+
+    fn update_interactive_state(&mut self, state: &InteractiveState) {
+        let changed = self.hovered != state.hovered
+            || self.pressed != state.pressed
+            || self.focused != state.focused
+            || self.dragging != state.dragging;
+        if changed {
+            self.hovered = state.hovered;
+            self.pressed = state.pressed;
+            self.focused = state.focused;
+            self.dragging = state.dragging;
+            self.mark_dirty();
+        }
+    }
+
+    fn update_drag_state(&mut self, is_source: bool, is_target: bool) {
+        if self.drag_is_source != is_source || self.drag_is_target != is_target {
+            self.drag_is_source = is_source;
+            self.drag_is_target = is_target;
+            self.mark_dirty();
+        }
     }
 }
 
@@ -360,6 +435,14 @@ impl RenderBox for DecoratedBoxRenderObject {
 
     fn set_widget_id(&mut self, id: WidgetId) {
         self.id = Some(id);
+    }
+
+    fn update_interactive_state(&mut self, state: &InteractiveState) {
+        <Self>::update_interactive_state(self, state);
+    }
+
+    fn update_drag_state(&mut self, is_source: bool, is_target: bool) {
+        <Self>::update_drag_state(self, is_source, is_target);
     }
 
     fn can_focus(&self) -> bool {

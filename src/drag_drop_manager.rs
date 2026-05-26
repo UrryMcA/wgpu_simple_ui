@@ -1,4 +1,3 @@
-// src/drag_drop_manager.rs
 use crate::common::event::{DragData, Event};
 use crate::common::render_box::WidgetId;
 use crate::common::types::Point;
@@ -76,9 +75,15 @@ impl DragDropManager {
     pub fn handle_drag_move(&mut self, point: Point, ui: &mut UiManager) {
         let new_target = ui.hit_test(point);
         if new_target != self.current_drop_target {
+            // Сброс старой цели
             if let Some(old) = self.current_drop_target {
+                ui.with_widget_mut(old, |widget| {
+                    widget.update_drag_state(false, false);
+                    true
+                });
                 ui.send_event_to_widget(old, &Event::DragLeave);
             }
+            // Установка новой цели
             if let Some(new) = new_target {
                 if let Some(data) = &self.drag_data {
                     let mut can_drop = false;
@@ -87,6 +92,10 @@ impl DragDropManager {
                         true
                     });
                     if can_drop {
+                        ui.with_widget_mut(new, |widget| {
+                            widget.update_drag_state(false, true);
+                            true
+                        });
                         ui.send_event_to_widget(new, &Event::DragEnter {
                             point,
                             data: data.clone(),
@@ -126,6 +135,10 @@ impl DragDropManager {
             }
         }
         if let Some(source) = self.drag_source_id {
+            ui.with_widget_mut(source, |widget| {
+                widget.update_drag_state(false, false);
+                true
+            });
             ui.send_event_to_widget(source, &Event::DragEnd { point, cancelled });
         }
         self.drag_active = false;
@@ -144,6 +157,11 @@ impl DragDropManager {
             self.drag_active = true;
             self.drag_source_id = Some(source_id);
             self.drag_data = Some(data.clone());
+            // Уведомляем источник, что он стал источником перетаскивания
+            ui.with_widget_mut(source_id, |widget| {
+                widget.update_drag_state(true, false);
+                true
+            });
             ui.send_event_to_widget(source_id, &Event::DragStart {
                 point: start_point,
                 source_id,
