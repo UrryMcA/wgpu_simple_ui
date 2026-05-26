@@ -23,6 +23,7 @@ pub enum CanvasItem {
 }
 
 pub struct Canvas {
+    id: Option<WidgetId>,
     pub width: f32,
     pub height: f32,
     pub items: Vec<CanvasItem>,
@@ -34,6 +35,7 @@ pub struct Canvas {
 impl Canvas {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
+            id: None,
             width,
             height,
             items: Vec::new(),
@@ -64,6 +66,11 @@ impl Canvas {
         self.on_click = Some(Box::new(f));
         self
     }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }    
 }
 
 impl Widget for Canvas {
@@ -74,6 +81,7 @@ impl Widget for Canvas {
     fn padding(&self) -> EdgeInsets { EdgeInsets::default() }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(CanvasRenderObject {
+            id: self.id,            
             items: std::mem::take(&mut self.items),
             width: self.width,
             height: self.height,
@@ -85,11 +93,21 @@ impl Widget for Canvas {
             dirty: true,
         })
     }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
 }
 
 impl  LeafRenderObjectWidget for Canvas {}
 
 struct CanvasRenderObject {
+    id: Option<WidgetId>,
     items: Vec<CanvasItem>,
     width: f32,
     height: f32,
@@ -204,6 +222,13 @@ impl RenderBox for CanvasRenderObject {
     fn is_focused(&self) -> bool { false }
     fn handle_key_down(&mut self, _: Key, _: KeyboardModifiers) -> bool { false }
     fn handle_char_input(&mut self, _: char) -> bool { false }
-    fn widget_id(&self) -> Option<WidgetId> { None }
     fn margin(&self) -> EdgeInsets { EdgeInsets::default() }
+
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
 }

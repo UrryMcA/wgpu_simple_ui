@@ -13,6 +13,7 @@ use crate::texture_manager::SamplerKind;
 use crate::ui_manager::UiManager;
 
 pub struct Container {
+    id: Option<WidgetId>,
     children: Vec<Box<dyn Widget>>,
     axis: Axis,
     spacing: f32,
@@ -26,6 +27,7 @@ pub struct Container {
 impl Container {
     pub fn new() -> Self {
         Self {
+            id: None,
             children: Vec::new(),
             axis: Axis::Vertical,
             spacing: 0.0,
@@ -50,6 +52,11 @@ impl Container {
     pub fn corner_radius(mut self, radius: f32) -> Self { self.corner_radius = radius; self }
     pub fn add_child(mut self, child: Box<dyn Widget>) -> Self { self.children.push(child); self }
     pub fn add_children(mut self, children: Vec<Box<dyn Widget>>) -> Self { self.children.extend(children); self }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }    
 }
 
 impl Widget for Container {
@@ -66,6 +73,7 @@ impl Widget for Container {
             Axis::Grid { cols, rows, spacing_x, spacing_y } => Box::new(GridLayout::new(cols, rows, spacing_x, spacing_y)),
         };
         Box::new(ContainerRenderObject {
+            id: self.id,
             children: children_render,
             strategy,
             margin: self.margin,
@@ -74,12 +82,20 @@ impl Widget for Container {
             corner_radius: self.corner_radius,
             position: Point::default(),
             size: Size::default(),
-            id: None,
             cached_vertices: Vec::new(),
             cached_indices: Vec::new(),
             dirty: true,
         })
     }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
 }
 
 impl MultiChildRenderObjectWidget for Container {
@@ -87,6 +103,7 @@ impl MultiChildRenderObjectWidget for Container {
 }
 
 pub struct ContainerRenderObject {
+    id: Option<WidgetId>,
     children: Vec<Box<dyn RenderBox>>,
     strategy: Box<dyn LayoutStrategy>,
     margin: EdgeInsets,
@@ -95,7 +112,6 @@ pub struct ContainerRenderObject {
     corner_radius: f32,
     position: Point,
     size: Size,
-    id: Option<WidgetId>,
     // Кэш
     cached_vertices: Vec<Vertex>,
     cached_indices: Vec<u32>,
@@ -228,8 +244,15 @@ impl RenderBox for ContainerRenderObject {
             child.on_drop(data, point);
         }
     }
-    fn widget_id(&self) -> Option<WidgetId> { self.id }
     fn margin(&self) -> EdgeInsets { self.margin }
+
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
 }
 
 impl Drop for ContainerRenderObject { fn drop(&mut self) {} }

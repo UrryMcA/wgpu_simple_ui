@@ -6,25 +6,25 @@ use crate::common::event::Event;
 use crate::ui_manager::UiManager;
 
 pub struct ScrollableContainer {
+    id: Option<WidgetId>,
     child: Box<dyn RenderBox>,
     scroll_x: f32,
     scroll_y: f32,
     viewport_size: Size,
     margin: EdgeInsets,
     position: Point,           // абсолютная позиция контейнера
-    id: Option<WidgetId>,
 }
 
 impl ScrollableContainer {
     pub fn new(child: Box<dyn RenderBox>) -> Self {
         Self {
+            id: None,
             child,
             scroll_x: 0.0,
             scroll_y: 0.0,
             viewport_size: Size::default(),
             margin: EdgeInsets::default(),
             position: Point::default(),
-            id: None,
         }
     }
     pub fn margin(mut self, m: EdgeInsets) -> Self { self.margin = m; self }
@@ -50,6 +50,11 @@ impl ScrollableContainer {
             (self.viewport_size.height - self.margin.top - self.margin.bottom).max(0.0),
         )
     }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }    
 }
 
 impl RenderBox for ScrollableContainer {
@@ -171,11 +176,14 @@ impl RenderBox for ScrollableContainer {
         }
     }
 
+    fn margin(&self) -> EdgeInsets {
+        self.margin
+    }
+
     fn widget_id(&self) -> Option<WidgetId> {
         self.id
     }
-
-    fn margin(&self) -> EdgeInsets {
-        self.margin
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
     }
 }

@@ -5,12 +5,13 @@ use crate::ui::decorated_box::{Background, DecoratedBox};
 use crate::ui::interactive_box::InteractiveBox;
 use crate::ui::interactive_state::InteractiveState;
 use crate::ui::widgets::{Container, Image, Label};
-use crate::common::render_box::RenderBox;
+use crate::common::render_box::{RenderBox, WidgetId};
 use crate::widgets::Widget;
 use crate::widgets::canvas::CanvasItem;
 
 /// Универсальная кнопка, построенная на композиции `InteractiveBox` и `DecoratedBox`.
 pub struct Button {
+    id: Option<WidgetId>,
     child: Option<Box<dyn Widget>>,
     background: Option<Background>,
     corner_radius: f32,
@@ -26,6 +27,7 @@ impl Button {
     /// Создаёт кнопку с произвольным содержимым.
     pub fn new(child: impl Widget + 'static) -> Self {
         Self {
+            id: None,
             child: Some(Box::new(child)),
             background: None,
             corner_radius: 0.0,
@@ -36,6 +38,11 @@ impl Button {
             drag_data: None,
             on_state_change: None,
         }
+    }
+    
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
     }
 
     /// Создаёт текстовую кнопку.
@@ -135,6 +142,14 @@ impl Button {
 }
 
 impl Widget for Button {
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
     fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size {
         Size::zero()
     }
@@ -149,7 +164,7 @@ impl Widget for Button {
 
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let child = self.child.take().expect("Button child already taken");
-        let background = self.background.take().unwrap_or_else(|| Background::default());
+        let background = self.background.take().unwrap_or_else(Background::default);
 
         let mut decorated = DecoratedBox::new(child)
             .background(background)
@@ -158,6 +173,11 @@ impl Widget for Button {
             .padding(self.padding);
         if let Some((thickness, color)) = self.border {
             decorated = decorated.border(thickness, color);
+        }
+
+        // Устанавливаем ID в DecoratedBox, если он есть
+        if let Some(id) = self.id {
+            decorated.set_id(id);
         }
 
         let mut interactive = InteractiveBox::new(decorated);
@@ -172,4 +192,5 @@ impl Widget for Button {
         }
         interactive.create_render_object()
     }
+    
 }

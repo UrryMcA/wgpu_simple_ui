@@ -1,6 +1,6 @@
 // src/ui/widgets/panel.rs
 use super::widget::Widget;
-use crate::common::render_box::RenderBox;
+use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::primitives::Primitives;
 use crate::common::types::*;
@@ -11,6 +11,7 @@ use crate::ui_manager::UiManager;
 use crate::texture_manager::{TextureManager, SamplerKind};
 
 pub struct Panel {
+    id: Option<WidgetId>,
     child: Box<dyn Widget>,
     background_color: UColor,
     corner_radius: f32,
@@ -25,6 +26,7 @@ pub struct Panel {
 impl Panel {
     pub fn new(child: Box<dyn Widget>) -> Self {
         Self {
+            id: None,
             child,
             background_color: UColor([0.2, 0.2, 0.2, 1.0]),
             corner_radius: 8.0,
@@ -47,6 +49,11 @@ impl Panel {
         if let Some(c) = tint { self.overlay_tint = c; }
         self
     }
+    
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
 impl Widget for Panel {
@@ -61,6 +68,7 @@ impl Widget for Panel {
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let child_render = self.child.create_render_object();
         Box::new(PanelRenderObject {
+            id: self.id,            
             child: child_render,
             background_color: self.background_color,
             corner_radius: self.corner_radius,
@@ -68,7 +76,6 @@ impl Widget for Panel {
             margin: self.margin,
             position: Point::default(),
             size: Size::default(),
-            id: None,
             overlay_texture_id: self.overlay_texture_id,
             overlay_fit: self.overlay_fit,
             overlay_tint: self.overlay_tint,
@@ -79,9 +86,19 @@ impl Widget for Panel {
             dirty: true,
         })
     }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
 }
 
 struct PanelRenderObject {
+    id: Option<WidgetId>,
     child: Box<dyn RenderBox>,
     background_color: UColor,
     corner_radius: f32,
@@ -89,7 +106,6 @@ struct PanelRenderObject {
     margin: EdgeInsets,
     position: Point,
     size: Size,
-    id: Option<u64>,
     overlay_texture_id: Option<u64>,
     overlay_fit: BackgroundFit,
     overlay_tint: UColor,
@@ -237,5 +253,12 @@ impl RenderBox for PanelRenderObject {
     fn on_drag_enter(&mut self, d: &DragData, p: Point) { self.child.on_drag_enter(d, p); }
     fn on_drag_leave(&mut self) { self.child.on_drag_leave(); }
     fn on_drop(&mut self, d: &DragData, p: Point) { self.child.on_drop(d, p); }
-    fn widget_id(&self) -> Option<u64> { self.id }
+
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
 }

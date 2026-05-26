@@ -1,11 +1,12 @@
 // src/widgets/label.rs
 use super::widget::{Widget, LeafRenderObjectWidget};
-use crate::common::render_box::RenderBox;
+use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::{Vertex, types::*};
 use crate::texture_manager::SamplerKind;
 
 pub struct Label {
+    id: Option<WidgetId>,
     text: String,
     font_name: String,
     font_size: f32,
@@ -16,6 +17,7 @@ pub struct Label {
 impl Label {
     pub fn new(text: impl Into<String>) -> Self {
         Self {
+            id: None,
             text: text.into(),
             font_name: "default".into(),
             font_size: 16.0,
@@ -23,18 +25,33 @@ impl Label {
             margin: EdgeInsets::default(),
         }
     }
+
     pub fn font_size(mut self, size: f32) -> Self { self.font_size = size; self }
     pub fn color(mut self, c: UColor) -> Self { self.color = c; self }
     pub fn margin(mut self, m: EdgeInsets) -> Self { self.margin = m; self }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
 impl Widget for Label {
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
     fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size {
         ctx.measure_text_with_font(&self.font_name, &self.text, self.font_size, f32::INFINITY)
     }
     fn margin(&self) -> EdgeInsets { self.margin }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
-        Box::new(LabelRenderObject {
+        let mut  ro = LabelRenderObject {
+            id: None,
             text: self.text.clone(),
             font_name: self.font_name.clone(),
             font_size: self.font_size,
@@ -46,13 +63,18 @@ impl Widget for Label {
             cached_vertices: Vec::new(),
             cached_indices: Vec::new(),
             dirty: true,
-        })
+        };
+        if let Some(id) = self.id {
+            ro.set_widget_id(id);
+        }
+        Box::new(ro)
     }
 }
 
 impl LeafRenderObjectWidget for Label {}
 
 struct LabelRenderObject {
+    id: Option<WidgetId>,
     text: String,
     font_name: String,
     font_size: f32,

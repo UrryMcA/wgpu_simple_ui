@@ -19,7 +19,6 @@ pub enum Background {
         tint: UColor,
     },
     Canvas(Vec<CanvasItem>),
-    /// Несколько слоёв фона, которые будут рисоваться последовательно (сначала первый, потом второй и т.д.)
     Composite(Vec<Background>),
 }
 
@@ -30,6 +29,7 @@ impl Default for Background {
 }
 
 pub struct DecoratedBox {
+    id: Option<WidgetId>,
     child: Box<dyn Widget>,
     background: Background,
     corner_radius: f32,
@@ -41,6 +41,7 @@ pub struct DecoratedBox {
 impl DecoratedBox {
     pub fn new(child: Box<dyn Widget>) -> Self {
         Self {
+            id: None,
             child,
             background: Background::default(),
             corner_radius: 0.0,
@@ -74,6 +75,11 @@ impl DecoratedBox {
         self.padding = padding;
         self
     }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
 impl Widget for DecoratedBox {
@@ -85,9 +91,17 @@ impl Widget for DecoratedBox {
         self.padding
     }
 
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let child_ro = self.child.create_render_object();
-        Box::new(DecoratedBoxRenderObject {
+        let ro = DecoratedBoxRenderObject {
             child: child_ro,
             background: std::mem::take(&mut self.background),
             corner_radius: self.corner_radius,
@@ -100,7 +114,9 @@ impl Widget for DecoratedBox {
             border_vertices: Vec::new(),
             border_indices: Vec::new(),
             dirty: true,
-        })
+            id: self.id,
+        };
+        Box::new(ro)
     }
 
     fn min_size(&self, ctx: &mut dyn LayoutContext) -> Size {
@@ -119,11 +135,11 @@ struct DecoratedBoxRenderObject {
     padding: EdgeInsets,
     position: Point,
     size: Size,
-    /// Список слоёв: (texture_id, sampler_kind, vertices, indices)
     bg_layers: Vec<(u64, SamplerKind, Vec<Vertex>, Vec<u32>)>,
     border_vertices: Vec<Vertex>,
     border_indices: Vec<u32>,
     dirty: bool,
+    id: Option<WidgetId>,
 }
 
 impl DecoratedBoxRenderObject {
@@ -131,8 +147,6 @@ impl DecoratedBoxRenderObject {
         self.dirty = true;
     }
 
-    /// Вспомогательная функция: создаёт слой фона для заданного `Background` (не `Composite`).
-    /// Возвращает `Some((texture_id, sampler_kind, vertices, indices))` или `None`.
     fn create_background_layer(
         bg: &Background,
         corner_radius: f32,
@@ -163,7 +177,6 @@ impl DecoratedBoxRenderObject {
                         Some((*texture_id, sampler_kind, v, i))
                     }
                 } else {
-                    // fallback: белый цвет
                     let (v, i) = primitives.rounded_rect_vertices_indices(rect, corner_radius, UColor::new(1.0, 1.0, 1.0, 1.0));
                     if v.is_empty() {
                         None
@@ -195,10 +208,7 @@ impl DecoratedBoxRenderObject {
                     Some((0, SamplerKind::Clamp, tmp_verts, tmp_inds))
                 }
             }
-            Background::Composite(_) => {
-                // Не должен попадать сюда – обрабатывается на верхнем уровне.
-                None
-            }
+            Background::Composite(_) => None,
         }
     }
 
@@ -293,7 +303,6 @@ impl RenderBox for DecoratedBoxRenderObject {
             self.rebuild_cache(ctx.primitives, ctx.textures);
         }
 
-        // Рисуем все слои фона (каждый со своей текстурой и сэмплером)
         for (texture_id, sampler_kind, vertices, indices) in &self.bg_layers {
             if vertices.is_empty() {
                 continue;
@@ -306,7 +315,6 @@ impl RenderBox for DecoratedBoxRenderObject {
             ctx.add_command(*texture_id, *sampler_kind, world_verts, indices.clone());
         }
 
-        // Рисуем обводку
         if !self.border_vertices.is_empty() {
             let mut world_verts = self.border_vertices.clone();
             for v in &mut world_verts {
@@ -347,7 +355,11 @@ impl RenderBox for DecoratedBoxRenderObject {
     }
 
     fn widget_id(&self) -> Option<WidgetId> {
-        self.child.widget_id()
+        self.id
+    }
+
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
     }
 
     fn can_focus(&self) -> bool {

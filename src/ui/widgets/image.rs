@@ -1,11 +1,13 @@
-// src/widgets/image.rs
-use super::widget::{Widget, LeafRenderObjectWidget};
-use crate::common::render_box::RenderBox;
+// src/ui/widgets/image.rs
+use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
-use crate::common::{Primitives, Vertex, types::*};
+use crate::common::{Primitives, types::*};
+use crate::common::vertex::Vertex;
 use crate::texture_manager::SamplerKind;
+use crate::widgets::{LeafRenderObjectWidget, Widget};
 
 pub struct Image {
+    id: Option<WidgetId>,
     texture_id: u64,
     size: Size,
     margin: EdgeInsets,
@@ -14,19 +16,44 @@ pub struct Image {
 impl Image {
     pub fn new(texture_id: u64, width: f32, height: f32) -> Self {
         Self {
+            id: None,
             texture_id,
             size: Size::new(width, height),
             margin: EdgeInsets::default(),
         }
     }
-    pub fn margin(mut self, m: EdgeInsets) -> Self { self.margin = m; self }
+
+    pub fn margin(mut self, m: EdgeInsets) -> Self {
+        self.margin = m;
+        self
+    }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
 impl Widget for Image {
-    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size { self.size }
-    fn margin(&self) -> EdgeInsets { self.margin }
+    fn min_size(&self, _ctx: &mut dyn LayoutContext) -> Size {
+        self.size
+    }
+
+    fn margin(&self) -> EdgeInsets {
+        self.margin
+    }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
-        Box::new(ImageRenderObject {
+        let mut ro = ImageRenderObject {
+            id: self.id,
             texture_id: self.texture_id,
             size: self.size,
             margin: self.margin,
@@ -34,18 +61,19 @@ impl Widget for Image {
             cached_vertices: Vec::new(),
             cached_indices: Vec::new(),
             dirty: true,
-        })
+        };
+        Box::new(ro)
     }
 }
 
 impl LeafRenderObjectWidget for Image {}
 
 struct ImageRenderObject {
+    id: Option<WidgetId>,
     texture_id: u64,
     size: Size,
     margin: EdgeInsets,
     position: Point,
-    // Кэш
     cached_vertices: Vec<Vertex>,
     cached_indices: Vec<u32>,
     dirty: bool,
@@ -84,8 +112,13 @@ impl RenderBox for ImageRenderObject {
         }
     }
 
-    fn position(&self) -> Point { self.position }
-    fn size(&self) -> Size { self.size }
+    fn position(&self) -> Point {
+        self.position
+    }
+
+    fn size(&self) -> Size {
+        self.size
+    }
 
     fn render(&mut self, ctx: &mut RenderContext) {
         if self.dirty {
@@ -94,10 +127,27 @@ impl RenderBox for ImageRenderObject {
         ctx.add_command(self.texture_id, SamplerKind::Clamp, self.cached_vertices.clone(), self.cached_indices.clone());
     }
 
-    fn children(&self) -> &[Box<dyn RenderBox>] { &[] }
-    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] { &mut [] }
+    fn children(&self) -> &[Box<dyn RenderBox>] {
+        &[]
+    }
+
+    fn children_mut(&mut self) -> &mut [Box<dyn RenderBox>] {
+        &mut []
+    }
+
     fn hit_test(&self, point: Point) -> bool {
         Rect::new(self.position.x, self.position.y, self.size.width, self.size.height).contains(point)
     }
-    fn margin(&self) -> EdgeInsets { self.margin }
+
+    fn margin(&self) -> EdgeInsets {
+        self.margin
+    }
+
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
 }

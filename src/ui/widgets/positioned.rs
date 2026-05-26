@@ -1,10 +1,11 @@
 // src/widgets/positioned.rs
 use super::widget::{Widget, SingleChildRenderObjectWidget};
-use crate::common::render_box::RenderBox;
+use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::types::*;
 
 pub struct Positioned {
+    id: Option<WidgetId>,
     child: Box<dyn Widget>,
     left: Option<f32>, top: Option<f32>, right: Option<f32>, bottom: Option<f32>,
     width: Option<f32>, height: Option<f32>,
@@ -13,6 +14,7 @@ pub struct Positioned {
 impl Positioned {
     pub fn new(child: impl Widget + 'static) -> Self {
         Self {
+            id: None,
             child: Box::new(child),
             left: None, top: None, right: None, bottom: None,
             width: None, height: None,
@@ -24,6 +26,11 @@ impl Positioned {
     pub fn bottom(mut self, v: f32) -> Self { self.bottom = Some(v); self }
     pub fn width(mut self, v: f32) -> Self { self.width = Some(v); self }
     pub fn height(mut self, v: f32) -> Self { self.height = Some(v); self }
+
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }    
 }
 
 impl Widget for Positioned {
@@ -32,6 +39,7 @@ impl Widget for Positioned {
     }
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(PositionedRenderObject {
+            id: self.id,            
             child: self.child.create_render_object(),
             left: self.left, top: self.top, right: self.right, bottom: self.bottom,
             width: self.width, height: self.height,
@@ -39,6 +47,15 @@ impl Widget for Positioned {
             size: Size::default(),
         })
     }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
 }
 
 impl SingleChildRenderObjectWidget for Positioned {
@@ -46,6 +63,7 @@ impl SingleChildRenderObjectWidget for Positioned {
 }
 
 struct PositionedRenderObject {
+    id: Option<WidgetId>,
     child: Box<dyn RenderBox>,
     left: Option<f32>, top: Option<f32>, right: Option<f32>, bottom: Option<f32>,
     width: Option<f32>, height: Option<f32>,
@@ -86,4 +104,12 @@ impl RenderBox for PositionedRenderObject {
     fn render(&mut self, ctx: &mut RenderContext) {
         self.child.render(ctx);
     }
+
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
 }

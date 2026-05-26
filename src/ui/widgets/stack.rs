@@ -1,12 +1,13 @@
 // src/widgets/stack.rs
 use super::widget::{Widget, MultiChildRenderObjectWidget};
-use crate::common::render_box::RenderBox;
+use crate::common::render_box::{RenderBox, WidgetId};
 use crate::common::render_context::RenderContext;
 use crate::common::types::*;
 use crate::common::event::Event;
 use crate::ui_manager::UiManager;
 
 pub struct Stack {
+    id: Option<WidgetId>,
     children: Vec<Box<dyn Widget>>,
     alignment: Alignment,
 }
@@ -14,6 +15,7 @@ pub struct Stack {
 impl Stack {
     pub fn new(children: Vec<Box<dyn Widget>>) -> Self {
         Self {
+            id: None,
             children,
             alignment: Alignment::Start,
         }
@@ -23,6 +25,11 @@ impl Stack {
         self.alignment = alignment;
         self
     }
+    
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }    
 }
 
 impl Widget for Stack {
@@ -36,12 +43,22 @@ impl Widget for Stack {
         }
         Size::new(max_w, max_h)
     }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+        
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         let mut render_objects = Vec::new();
         for child in &mut self.children {
             render_objects.push(child.create_render_object());
         }
         Box::new(StackRenderObject {
+            id: self.id,
             children: render_objects,
             alignment: self.alignment,
             position: Point::default(),
@@ -57,6 +74,7 @@ impl MultiChildRenderObjectWidget for Stack {
 }
 
 struct StackRenderObject {
+    id: Option<WidgetId>,
     children: Vec<Box<dyn RenderBox>>,
     alignment: Alignment,
     position: Point,
@@ -136,5 +154,13 @@ impl RenderBox for StackRenderObject {
             }
         }
         false
+    }
+    
+    
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
     }
 }

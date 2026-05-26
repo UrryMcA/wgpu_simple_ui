@@ -9,6 +9,7 @@ use crate::texture_manager::SamplerKind;
 use crate::ui_manager::UiManager;
 
 pub struct OutlineRect {
+    id: Option<WidgetId>,
     width: f32,
     height: f32,
     corner_radius: f32,
@@ -20,6 +21,7 @@ pub struct OutlineRect {
 impl OutlineRect {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
+            id: None,
             width,
             height,
             corner_radius: 8.0,
@@ -48,6 +50,11 @@ impl OutlineRect {
         self.margin = m;
         self
     }
+    
+    pub fn with_id(mut self, id: WidgetId) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
 impl Widget for OutlineRect {
@@ -65,6 +72,7 @@ impl Widget for OutlineRect {
 
     fn create_render_object(&mut self) -> Box<dyn RenderBox> {
         Box::new(OutlineRectRenderObject {
+            id: self.id,
             width: self.width,
             height: self.height,
             radius: self.corner_radius,
@@ -72,17 +80,26 @@ impl Widget for OutlineRect {
             color: self.color,
             position: Point::default(),
             size: Size::default(),
-            id: None,
             cached_vertices: Vec::new(),
             cached_indices: Vec::new(),
             dirty: true,
         })
     }
+
+    fn set_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
+    fn id(&self) -> Option<WidgetId> {
+        self.id
+    }
+
 }
 
 impl LeafRenderObjectWidget for OutlineRect {}
 
 struct OutlineRectRenderObject {
+    id: Option<WidgetId>,
     width: f32,
     height: f32,
     radius: f32,
@@ -90,7 +107,6 @@ struct OutlineRectRenderObject {
     color: UColor,
     position: Point,
     size: Size,
-    id: Option<WidgetId>,
     cached_vertices: Vec<Vertex>,
     cached_indices: Vec<u32>,
     dirty: bool,
@@ -194,11 +210,15 @@ impl RenderBox for OutlineRectRenderObject {
         false
     }
 
-    fn widget_id(&self) -> Option<WidgetId> {
-        self.id
-    }
-
     fn margin(&self) -> EdgeInsets {
         EdgeInsets::default()
     }
+    
+    fn widget_id(&self) -> Option<WidgetId> {
+        self.id
+    }
+    fn set_widget_id(&mut self, id: WidgetId) {
+        self.id = Some(id);
+    }
+
 }

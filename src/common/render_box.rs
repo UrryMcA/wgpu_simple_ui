@@ -2,29 +2,19 @@ use crate::common::event::{DragData, Event, KeyboardModifiers};
 use crate::common::key::Key;
 use crate::common::render_context::RenderContext;
 use crate::common::types::{Constraints, EdgeInsets, LayoutContext, Point, Rect, Size};
+use crate::ui::interactive_state::InteractiveState;
 use crate::ui_manager::UiManager;
 use std::any::Any;
 
-/// Уникальный идентификатор виджета (для фокуса и хит-тестирования)
 pub type WidgetId = u64;
 
-/// Основной трейт для всех объектов рендеринга.
 pub trait RenderBox: Any {
     // ---------- Обязательные методы ----------
     fn render(&mut self, ctx: &mut RenderContext);
-
-    /// Вычисляет размер виджета в соответствии с constraints, используя контекст.
-    /// После вызова layout, виджет должен запомнить свой final_size.
     fn layout(&mut self, constraints: Constraints, ctx: &mut dyn LayoutContext) -> Size;
-    
-    /// Установить позицию (вызывается контейнером после layout).
     fn set_position(&mut self, position: Point);
-    
-    /// Получить текущий размер (после layout).
     fn size(&self) -> Size;
-    
-    /// Получить позицию.
-    fn position(&self) -> Point;    
+    fn position(&self) -> Point;
 
     // ---------- Методы для работы с деревом ----------
     fn children(&self) -> &[Box<dyn RenderBox>] {
@@ -36,28 +26,22 @@ pub trait RenderBox: Any {
 
     // ---------- Хит-тестирование ----------
     fn hit_test(&self, point: Point) -> bool {
-        let rect = Rect::new(
+        Rect::new(
             self.position().x,
             self.position().y,
             self.size().width,
             self.size().height,
-        );
-        rect.contains(point)
+        ).contains(point)
     }
 
-    // ---------- Обработка событий (базовая маршрутизация) ----------
+    // ---------- Обработка событий ----------
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
-        // Если у события нет точки, пробуем отдать детям без проверки попадания?
-        // Лучше проверять только если точка есть.
         if let Some(point) = event.point() {
             for child in self.children_mut().iter_mut().rev() {
                 if child.hit_test(point) && child.handle_event(event, ui_manager) {
                     return true;
                 }
             }
-        } else {
-            // События без точки (например, клавиатурные) отправляем всем детям? Обычно нет.
-            // Для безопасности просто игнорируем или отправляем первому? Оставим false.
         }
         false
     }
@@ -82,7 +66,7 @@ pub trait RenderBox: Any {
         false
     }
 
-    // ---------- Колесо мыши (scroll) ----------
+    // ---------- Колесо мыши ----------
     fn handle_mouse_wheel(&mut self, _delta_x: f32, _delta_y: f32, _point: Point) -> bool {
         false
     }
@@ -106,10 +90,23 @@ pub trait RenderBox: Any {
     fn on_drag_leave(&mut self) {}
     fn on_drop(&mut self, _data: &DragData, _point: Point) {}
 
-    // ---------- Идентификатор для системы фокуса ----------
+    // ---------- Идентификатор ----------
     fn widget_id(&self) -> Option<WidgetId> {
         None
     }
+
+    // ---------- НОВЫЕ МЕТОДЫ (пункт 1 плана) ----------
+    /// Обновляет интерактивное состояние виджета (наведение, нажатие, фокус, перетаскивание).
+    /// По умолчанию ничего не делает. Виджеты, которые хотят реагировать на состояния, переопределяют этот метод.
+    fn update_interactive_state(&mut self, _state: &InteractiveState) {}
+
+    /// Обновляет состояние, связанное с drag & drop (является ли виджет источником или целью).
+    /// По умолчанию ничего не делает.
+    fn update_drag_state(&mut self, _is_source: bool, _is_target: bool) {}
+
+    /// Устанавливает уникальный идентификатор виджета.
+    /// По умолчанию ничего не делает. Виджеты, поддерживающие ID, переопределяют этот метод.
+    fn set_widget_id(&mut self, _id: WidgetId) {}
 
     // ---------- Вспомогательные ----------
     fn rect(&self) -> Rect {
@@ -120,7 +117,6 @@ pub trait RenderBox: Any {
             self.size().height,
         )
     }
-
     fn margin(&self) -> EdgeInsets {
         EdgeInsets::default()
     }
