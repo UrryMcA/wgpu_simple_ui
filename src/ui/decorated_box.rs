@@ -309,7 +309,7 @@ impl DecoratedBoxRenderObject {
         self.dirty = false;
     }
 
-    fn update_interactive_state(&mut self, state: &InteractiveState) {
+    fn update_interactive_state_internal(&mut self, state: &InteractiveState) {
         let changed = self.hovered != state.hovered
             || self.pressed != state.pressed
             || self.focused != state.focused
@@ -438,7 +438,18 @@ impl RenderBox for DecoratedBoxRenderObject {
     }
 
     fn update_interactive_state(&mut self, state: &InteractiveState) {
-        <Self>::update_interactive_state(self, state);
+        let changed = self.hovered != state.hovered
+            || self.pressed != state.pressed
+            || self.focused != state.focused
+            || self.dragging != state.dragging;
+        if changed {
+            self.hovered = state.hovered;
+            self.pressed = state.pressed;
+            self.focused = state.focused;
+            self.dragging = state.dragging;
+            self.mark_dirty();
+            println!("[DECORATED] state changed: hovered={}", self.hovered); // для отладки
+        }
     }
 
     fn update_drag_state(&mut self, is_source: bool, is_target: bool) {

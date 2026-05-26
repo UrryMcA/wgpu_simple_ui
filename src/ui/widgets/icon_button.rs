@@ -237,9 +237,9 @@ impl RenderBox for IconButtonRenderObject {
 
     fn handle_event(&mut self, event: &Event, _ui: &mut UiManager) -> bool {
         match event {
-            Event::Click(_) => { if let Some(cb) = &mut self.on_click { cb(); } true }
-            Event::PointerDown(_) => { self.is_pressed = true; self.mark_dirty(); true }
-            Event::PointerUp(_) => { self.is_pressed = false; self.mark_dirty(); true }
+            Event::Click(_,_) => { if let Some(cb) = &mut self.on_click { cb(); } true }
+            Event::PointerDown(_,_) => { self.is_pressed = true; self.mark_dirty(); true }
+            Event::PointerUp(_,_) => { self.is_pressed = false; self.mark_dirty(); true }
             Event::PointerMove(point) => {
                 let inside = self.hit_test(*point);
                 if inside != self.is_hovered { self.is_hovered = inside; self.mark_dirty(); }

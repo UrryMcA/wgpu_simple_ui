@@ -1,4 +1,4 @@
-use crate::common::event::{DragData, Event};
+use crate::common::event::{DragData, Event, MouseButton};
 use crate::common::render_box::WidgetId;
 use crate::common::types::Point;
 use crate::ui_manager::UiManager;
@@ -11,6 +11,7 @@ pub struct DragDropManager {
     potential_drag_source: Option<WidgetId>,
     current_drop_target: Option<WidgetId>,
     drag_threshold: f32,
+    drag_button: Option<MouseButton>,
 }
 
 impl DragDropManager {
@@ -23,6 +24,7 @@ impl DragDropManager {
             potential_drag_source: None,
             current_drop_target: None,
             drag_threshold: 5.0,
+            drag_button: None,
         }
     }
 
@@ -30,7 +32,10 @@ impl DragDropManager {
         self.drag_active
     }
 
-    pub fn on_pointer_down(&mut self, point: Point, ui: &mut UiManager) {
+    pub fn on_pointer_down(&mut self, point: Point, button: MouseButton, ui: &mut UiManager) {
+        if button != MouseButton::Left {
+            return;
+        }
         if let Some(widget_id) = ui.hit_test(point) {
             let mut can_drag = false;
             ui.with_widget_mut(widget_id, |widget| {
@@ -40,17 +45,23 @@ impl DragDropManager {
             if can_drag {
                 self.potential_drag_source = Some(widget_id);
                 self.drag_start_point = Some(point);
+                self.drag_button = Some(button);
+                println!("on_pointer_down: potential drag source set");
             }
         }
     }
 
-    pub fn on_pointer_up(&mut self, point: Point, ui: &mut UiManager) -> bool {
+    pub fn on_pointer_up(&mut self, point: Point, button: MouseButton, ui: &mut UiManager) -> bool {
+        if button != MouseButton::Left {
+            return false;
+        }
         if self.drag_active {
             self.end_drag(point, false, ui);
             return true;
         }
         self.potential_drag_source = None;
         self.drag_start_point = None;
+        self.drag_button = None;
         false
     }
 
@@ -64,8 +75,10 @@ impl DragDropManager {
                 let dx = point.x - start.x;
                 let dy = point.y - start.y;
                 if dx.hypot(dy) > self.drag_threshold {
-                    self.start_drag(source_id, start, ui);
-                    return true;
+                    if let Some(button) = self.drag_button {
+                        self.start_drag(source_id, start, button, ui);
+                        return true;
+                    }
                 }
             }
         }
@@ -75,15 +88,14 @@ impl DragDropManager {
     pub fn handle_drag_move(&mut self, point: Point, ui: &mut UiManager) {
         let new_target = ui.hit_test(point);
         if new_target != self.current_drop_target {
-            // Сброс старой цели
             if let Some(old) = self.current_drop_target {
                 ui.with_widget_mut(old, |widget| {
                     widget.update_drag_state(false, false);
                     true
                 });
                 ui.send_event_to_widget(old, &Event::DragLeave);
+                println!("[DRAG] left old target");
             }
-            // Установка новой цели
             if let Some(new) = new_target {
                 if let Some(data) = &self.drag_data {
                     let mut can_drop = false;
@@ -96,13 +108,17 @@ impl DragDropManager {
                             widget.update_drag_state(false, true);
                             true
                         });
+                        let button = self.drag_button.unwrap_or(MouseButton::Left);
                         ui.send_event_to_widget(new, &Event::DragEnter {
                             point,
                             data: data.clone(),
+                            button,
                         });
                         self.current_drop_target = Some(new);
+                        println!("[DRAG] entered target, can_drop true");
                     } else {
                         self.current_drop_target = None;
+                        println!("[DRAG] target not can_drop");
                     }
                 } else {
                     self.current_drop_target = None;
@@ -117,6 +133,7 @@ impl DragDropManager {
     }
 
     pub fn end_drag(&mut self, point: Point, cancelled: bool, ui: &mut UiManager) {
+        println!("[DRAG] end_drag called");
         if !cancelled {
             if let Some(target) = self.current_drop_target {
                 if let Some(data) = &self.drag_data {
@@ -126,10 +143,13 @@ impl DragDropManager {
                         true
                     });
                     if can_drop {
+                        let button = self.drag_button.unwrap_or(MouseButton::Left);
                         ui.send_event_to_widget(target, &Event::DragDrop {
                             point,
                             data: data.clone(),
+                            button,
                         });
+                        println!("[DRAG] dropped on target");
                     }
                 }
             }
@@ -141,13 +161,18 @@ impl DragDropManager {
             });
             ui.send_event_to_widget(source, &Event::DragEnd { point, cancelled });
         }
+        // Сброс всех состояний
         self.drag_active = false;
         self.drag_source_id = None;
         self.drag_data = None;
         self.current_drop_target = None;
+        self.drag_button = None;
+        self.potential_drag_source = None;
+        self.drag_start_point = None;
+        println!("[DRAG] state cleared");
     }
 
-    fn start_drag(&mut self, source_id: WidgetId, start_point: Point, ui: &mut UiManager) {
+    fn start_drag(&mut self, source_id: WidgetId, start_point: Point, button: MouseButton, ui: &mut UiManager) {
         let mut data = None;
         ui.with_widget_mut(source_id, |widget| {
             data = widget.drag_data();
@@ -157,7 +182,6 @@ impl DragDropManager {
             self.drag_active = true;
             self.drag_source_id = Some(source_id);
             self.drag_data = Some(data.clone());
-            // Уведомляем источник, что он стал источником перетаскивания
             ui.with_widget_mut(source_id, |widget| {
                 widget.update_drag_state(true, false);
                 true
@@ -166,7 +190,9 @@ impl DragDropManager {
                 point: start_point,
                 source_id,
                 data,
+                button,
             });
+            println!("start_drag called {:?}", self.drag_data);
         }
     }
 }

@@ -21,6 +21,8 @@ pub struct Button {
     on_click: Option<Box<dyn FnMut() + Send>>,
     drag_data: Option<DragData>,
     on_state_change: Option<Box<dyn FnMut(&InteractiveState) + Send>>,
+    can_drop_check: Option<Box<dyn Fn(&DragData) -> bool + Send>>,
+    on_drop_callback: Option<Box<dyn Fn(DragData) + Send>>,    
 }
 
 impl Button {
@@ -37,6 +39,8 @@ impl Button {
             on_click: None,
             drag_data: None,
             on_state_change: None,
+            can_drop_check: None,
+            on_drop_callback: None,
         }
     }
     
@@ -139,6 +143,16 @@ impl Button {
         self.on_state_change = Some(Box::new(f));
         self
     }
+    
+    pub fn can_drop(mut self, f: impl Fn(&DragData) -> bool + Send + 'static) -> Self {
+        self.can_drop_check = Some(Box::new(f));
+        self
+    }
+
+    pub fn on_drop(mut self, f: impl Fn(DragData) + Send + 'static) -> Self {
+        self.on_drop_callback = Some(Box::new(f));
+        self
+    }    
 }
 
 impl Widget for Button {
@@ -189,6 +203,12 @@ impl Widget for Button {
         }
         if let Some(on_state) = self.on_state_change.take() {
             interactive = interactive.on_state_change(on_state);
+        }
+        if let Some(can_drop) = self.can_drop_check.take() {
+            interactive = interactive.can_drop(can_drop);
+        }
+        if let Some(on_drop) = self.on_drop_callback.take() {
+            interactive = interactive.on_drop(on_drop);
         }
         interactive.create_render_object()
     }

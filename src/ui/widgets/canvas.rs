@@ -206,7 +206,7 @@ impl RenderBox for CanvasRenderObject {
     }
 
     fn handle_event(&mut self, event: &Event, _ui: &mut UiManager) -> bool {
-        if let Event::Click(p) = event {
+        if let Event::Click(p, b) = event {
             if let Some(cb) = &mut self.on_click {
                 let local = Point::new(p.x - self.position.x, p.y - self.position.y);
                 cb(local);

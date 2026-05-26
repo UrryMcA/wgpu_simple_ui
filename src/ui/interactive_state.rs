@@ -1,5 +1,5 @@
 // src/ui/interactive_state.rs
-use crate::common::event::{DragData, Event, KeyboardModifiers};
+use crate::common::event::{DragData, Event, KeyboardModifiers, MouseButton};
 use crate::common::key::Key;
 use crate::common::types::{Point, Rect};
 use crate::ui_manager::UiManager;
@@ -18,6 +18,9 @@ pub struct InteractiveState {
     pub on_click: Option<Box<dyn FnMut() + Send>>,
     /// Данные для перетаскивания (если виджет может быть источником drag)
     pub drag_data: Option<DragData>,
+    
+    pub can_drop_check: Option<Box<dyn Fn(&DragData) -> bool + Send>>,
+    pub on_drop_callback: Option<Box<dyn Fn(DragData) + Send>>,
 }
 
 impl InteractiveState {
@@ -29,7 +32,17 @@ impl InteractiveState {
             dragging: false,
             on_click: None,
             drag_data: None,
+            can_drop_check: None,
+            on_drop_callback: None,
         }
+    }
+    
+    pub fn set_can_drop(&mut self, f: impl Fn(&DragData) -> bool + Send + 'static) {
+        self.can_drop_check = Some(Box::new(f));
+    }
+    
+    pub fn set_on_drop(&mut self, f: impl Fn(DragData) + Send + 'static) {
+        self.on_drop_callback = Some(Box::new(f));
     }
 
     /// Установить колбэк на клик
@@ -55,23 +68,25 @@ impl InteractiveState {
         match event {
             Event::PointerMove(point) => {
                 let inside = widget_rect.contains(*point);
+                println!("[STATE] point={:?} rect={:?} inside={} hovered={}", point, widget_rect, inside, self.hovered);
                 if inside != self.hovered {
+                    println!("[STATE] hovered changed: {} -> {}", self.hovered, inside);
                     self.hovered = inside;
                 }
                 false
             }
-            Event::PointerDown(point) => {
-                if widget_rect.contains(*point) {
+            Event::PointerDown(_, button) => {
+                if *button == MouseButton::Left {
                     self.pressed = true;
                     true
                 } else {
                     false
                 }
             }
-            Event::PointerUp(point) => {
+            Event::PointerUp(_, button) => {
                 let was_pressed = self.pressed;
                 self.pressed = false;
-                if was_pressed && widget_rect.contains(*point) {
+                if *button == MouseButton::Left && was_pressed {
                     if let Some(cb) = &mut self.on_click {
                         cb();
                     }

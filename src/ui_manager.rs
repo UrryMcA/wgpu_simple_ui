@@ -21,6 +21,7 @@ pub struct UiManager {
     texture_manager: TextureManager,
     primitives: Box<dyn Primitives>,
     scale_factor: f32,
+    last_hovered_widget_id: Option<WidgetId>,
 }
 
 impl UiManager {
@@ -39,6 +40,7 @@ impl UiManager {
             texture_manager,
             primitives,
             scale_factor,
+            last_hovered_widget_id: None,
         }
     }
 
@@ -279,34 +281,35 @@ impl UiManager {
     // ---------- Обработка событий ----------
     pub fn process_event(&mut self, event: &Event) -> bool {
         match event {
-            Event::PointerDown(point) => {
+            Event::PointerDown(point, button) => {
                 let mut drag_drop = mem::take(&mut self.drag_drop);
-                drag_drop.on_pointer_down(*point, self);
+                drag_drop.on_pointer_down(*point, *button, self);
                 self.drag_drop = drag_drop;
 
-                if !self.drag_drop.is_drag_active() {
-                    if let Some(widget_id) = self.hit_test(*point) {
+                if let Some(widget_id) = self.hit_test(*point) {
+                    // Всегда отправляем событие виджету (независимо от drag)
+                    self.send_event_to_widget(widget_id, &Event::PointerDown(*point, *button));
+                    // Управление фокусом (только если drag не активен)
+                    if !self.drag_drop.is_drag_active() {
                         self.set_focus_to_widget(widget_id);
-                    } else {
-                        self.clear_focus();
                     }
                 } else {
-                    if let Some(widget_id) = self.hit_test(*point) {
-                        self.send_event_to_widget(widget_id, &Event::PointerDown(*point));
-                    }
+                    self.clear_focus();
                 }
                 false
             }
-            Event::PointerUp(point) => {
+            Event::PointerUp(point, button) => {
+                println!("[UI_MANAGER] PointerUp at {:?} button {:?}", point, button);
                 let mut drag_drop = mem::take(&mut self.drag_drop);
-                let handled = drag_drop.on_pointer_up(*point, self);
+                let handled = drag_drop.on_pointer_up(*point, *button, self);
                 self.drag_drop = drag_drop;
-
                 if handled {
+                    println!("[UI_MANAGER] Drag ended, returning true");
                     return true;
                 }
                 if let Some(widget_id) = self.hit_test(*point) {
-                    self.send_event_to_widget(widget_id, &Event::Click(*point));
+                    // Отправляем PointerUp, а не Click
+                    self.send_event_to_widget(widget_id, &Event::PointerUp(*point, *button));
                     return true;
                 }
                 false
@@ -315,11 +318,31 @@ impl UiManager {
                 let mut drag_drop = mem::take(&mut self.drag_drop);
                 let handled = drag_drop.on_pointer_move(*point, self);
                 self.drag_drop = drag_drop;
-                handled
+                if handled {
+                    return true;
+                }
+
+                let new_hovered = self.hit_test(*point);
+                // Если изменился виджет под курсором, отправляем PointerMove старому виджету, чтобы сбросить hover
+                if new_hovered != self.last_hovered_widget_id {
+                    if let Some(old_id) = self.last_hovered_widget_id {
+                        self.send_event_to_widget(old_id, &Event::PointerMove(*point));
+                    }
+                    self.last_hovered_widget_id = new_hovered;
+                }
+                // Отправляем событие новому виджету (если есть)
+                if let Some(widget_id) = new_hovered {
+                    self.send_event_to_widget(widget_id, &Event::PointerMove(*point));
+                }
+                true
             }
             Event::MouseWheel { delta_x, delta_y, point } => {
                 if let Some(widget_id) = self.hit_test(*point) {
-                    self.send_event_to_widget(widget_id, &Event::MouseWheel { delta_x: *delta_x, delta_y: *delta_y, point: *point });
+                    self.send_event_to_widget(widget_id, &Event::MouseWheel {
+                        delta_x: *delta_x,
+                        delta_y: *delta_y,
+                        point: *point,
+                    });
                     true
                 } else {
                     false
@@ -343,6 +366,8 @@ impl UiManager {
             _ => false,
         }
     }
+
+
 }
 
 impl LayoutContext for UiManager {

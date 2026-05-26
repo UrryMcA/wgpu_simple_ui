@@ -36,6 +36,17 @@ impl<W: Widget> InteractiveBox<W> {
         self.on_state_change = Some(Box::new(f));
         self
     }
+    
+    pub fn can_drop(mut self, f: impl Fn(&DragData) -> bool + Send + 'static) -> Self {
+        self.state.set_can_drop(f);
+        self
+    }
+
+    pub fn on_drop(mut self, f: impl Fn(DragData) + Send + 'static) -> Self {
+        self.state.set_on_drop(f);
+        self
+    }    
+
 }
 
 impl<W: Widget> Widget for InteractiveBox<W> {
@@ -128,9 +139,11 @@ impl RenderBox for InteractiveBoxRenderObject {
 
     fn handle_event(&mut self, event: &Event, ui_manager: &mut UiManager) -> bool {
         let rect = Rect::new(self.position.x, self.position.y, self.size.width, self.size.height);
+        println!("[BOX] rect={:?}", rect);
         let handled = self.state.handle_event(event, rect, ui_manager);
+        // Всегда синхронизируем состояние, так как hovered мог измениться
+        self.sync_state();
         if handled {
-            self.sync_state();
             return true;
         }
         self.child.handle_event(event, ui_manager)
@@ -174,20 +187,12 @@ impl RenderBox for InteractiveBoxRenderObject {
         self.sync_state();
     }
 
-    fn can_drop(&self, data: &DragData) -> bool {
-        self.child.can_drop(data)
-    }
-
     fn on_drag_enter(&mut self, data: &DragData, point: Point) {
         self.child.on_drag_enter(data, point);
     }
 
     fn on_drag_leave(&mut self) {
         self.child.on_drag_leave();
-    }
-
-    fn on_drop(&mut self, data: &DragData, point: Point) {
-        self.child.on_drop(data, point);
     }
 
     fn widget_id(&self) -> Option<WidgetId> {
@@ -210,4 +215,20 @@ impl RenderBox for InteractiveBoxRenderObject {
     fn set_widget_id(&mut self, id: WidgetId) {
         self.child.set_widget_id(id);
     }
+
+    fn can_drop(&self, data: &DragData) -> bool {
+        if let Some(check) = &self.state.can_drop_check {
+            check(data)
+        } else {
+            self.child.can_drop(data)
+        }
+    }
+    fn on_drop(&mut self, data: &DragData, point: Point) {
+        if let Some(cb) = &mut self.state.on_drop_callback {
+            cb(data.clone());
+        } else {
+            self.child.on_drop(data, point);
+        }
+    }
+
 }
